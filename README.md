@@ -24,10 +24,11 @@ Install to `~/.local/bin`:
 
     stack install
 
-`Mod4-Ctrl-w` removes a notification. You can also click them.
+`Mod4-Shift-Ctrl-w` removes all the notifications. `Mod4-Ctrl-w` removes the
+oldest notification. You can also click them.
 
 My eventual goal is to import this into my xmonad config & just run it with
-`forkOS`.
+`forkProcess`.
 
 
 

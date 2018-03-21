@@ -134,6 +134,9 @@ runGtk sTV = do
     closeOneShortcutThread <-
         withShortcutThread Xlib.xK_w (Xlib.mod4Mask .|. Xlib.controlMask)
             $ killFirstNotification sTV
+    closeAllShortcutThread <-
+        withShortcutThread Xlib.xK_w (Xlib.mod4Mask .|. Xlib.controlMask .|. Xlib.shiftMask)
+            $ killAllNotifications sTV
 
 
     -- New / Expired Checkers
@@ -162,7 +165,8 @@ runGtk sTV = do
         return True
 
     -- Run the loop
-    bracket (return shortcutThreadId) killThread $ const Gtk.main
+    bracket (return [closeOneShortcutThread, closeAllShortcutThread]) (mapM killThread)
+        $ const Gtk.main
 
 
 -- | Fork a Thread to Run an Action When the Key & Mask are Pressed.
@@ -359,6 +363,15 @@ killFirstNotification sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
             deleteNotification sTV Dismissed (nID n) win >> return False
         Nothing ->
             return False
+
+-- | Remove all `Notification`s currently in the `WindowList`.
+--
+--  Thread-safe.
+killAllNotifications :: TVar AppState -> IO ()
+killAllNotifications sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
+    appWindowList <$> readTVarIO sTV
+        >>= mapM_ (uncurry (deleteNotification sTV Dismissed) . first nID)
+        >> return False
 
 -- | Remove the `Notification` with the given `NotificationID`.
 --
