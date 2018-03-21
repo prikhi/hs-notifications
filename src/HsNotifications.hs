@@ -5,7 +5,7 @@ module HsNotifications where
 
 import Control.Applicative ((<|>))
 import Control.Arrow (first, second)
-import Control.Concurrent (threadDelay, forkIO, killThread)
+import Control.Concurrent (ThreadId, threadDelay, forkIO, killThread)
 import Control.Concurrent.STM (TVar, atomically, newTVarIO, modifyTVar, readTVar, readTVarIO, writeTVar)
 import Control.Exception (bracket)
 import Control.Monad ((<=<), (>=>), forever, when, void, join, foldM)
@@ -131,17 +131,9 @@ runGtk sTV = do
     -- TODO: Bind Global Clear All Key
     -- TODO: Move to separate function
     -- All these Xlib calls can throw exceptions...
-    shortcutThreadId <- forkIO . bracket (Xlib.openDisplay "") Xlib.closeDisplay $ \display -> do
-        let rootWindow = Xlib.defaultRootWindow display
-        wKeyCode <- Xlib.keysymToKeycode display Xlib.xK_w
-        Xlib.selectInput display Xlib.keyPressMask rootWindow
-        void . Xlib.allocaXEvent $ \ev ->
-            grabKeyWithIgnoreMasks display wKeyCode (Xlib.mod4Mask .|. Xlib.controlMask)
-                rootWindow False Xlib.grabModeAsync Xlib.grabModeAsync
-            $ \_ -> forever $ do
-                Xlib.nextEvent display ev
-                evType <- Xlib.get_EventType ev
-                when (evType == Xlib.keyPress) $ killFirstNotification sTV
+    closeOneShortcutThread <-
+        withShortcutThread Xlib.xK_w (Xlib.mod4Mask .|. Xlib.controlMask)
+            $ killFirstNotification sTV
 
 
     -- New / Expired Checkers
@@ -171,6 +163,22 @@ runGtk sTV = do
 
     -- Run the loop
     bracket (return shortcutThreadId) killThread $ const Gtk.main
+
+
+-- | Fork a Thread to Run an Action When the Key & Mask are Pressed.
+withShortcutThread :: Xlib.KeySym -> Xlib.KeyMask -> IO () -> IO ThreadId
+withShortcutThread keySym modMask action =
+    forkIO . bracket (Xlib.openDisplay "") Xlib.closeDisplay $ \display -> do
+        let rootWindow = Xlib.defaultRootWindow display
+        keyCode <- Xlib.keysymToKeycode display keySym
+        Xlib.selectInput display Xlib.keyPressMask rootWindow
+        void . Xlib.allocaXEvent $ \ev ->
+            grabKeyWithIgnoreMasks display keyCode modMask
+                rootWindow False Xlib.grabModeAsync Xlib.grabModeAsync
+            $ \_ -> forever $ do
+                Xlib.nextEvent display ev
+                evType <- Xlib.get_EventType ev
+                when (evType == Xlib.keyPress) action
 
 
 -- | Grab a Specific Key Input, Run an Action & Then Ungrab the Input.
@@ -361,6 +369,8 @@ killNotificationByID sTV reason notifID = void . Gdk.threadsAddIdle GLib.PRIORIT
     =<< find ((== notifID) . nID . fst) . appWindowList <$> readTVarIO sTV
 
 
+-- | Calculate the Actual & Expected Position of the Notifications & Move
+-- Them If Necessary.
 moveWindowsIfNecessary :: TVar AppState -> IO ()
 moveWindowsIfNecessary sTV = do
     state <- readTVarIO sTV
