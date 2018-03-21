@@ -12,7 +12,7 @@ import Control.Monad ((<=<), (>=>), forever, when, void, join, foldM)
 import Data.Bits ((.|.))
 import Data.Int (Int32)
 import Data.Time.Clock (UTCTime, getCurrentTime, addUTCTime)
-import Data.List (partition, subsequences)
+import Data.List (partition, subsequences, find)
 import Data.Maybe (listToMaybe)
 import Data.Monoid ((<>))
 import Data.Word (Word32)
@@ -321,6 +321,13 @@ killFirstNotification sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
         Nothing ->
             return False
 
+-- | Remove the `Notification` with the given `NotificationID`.
+--
+-- Thread-safe.
+killNotificationByID :: TVar AppState -> ReasonClosed -> NotificationID -> IO ()
+killNotificationByID sTV reason notifID = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
+    maybe (return False) (\(_, w) -> deleteNotification sTV reason notifID w >> return False)
+    =<< find ((== notifID) . nID . fst) . appWindowList <$> readTVarIO sTV
 
 moveWindowsIfNecessary :: TVar AppState -> IO ()
 moveWindowsIfNecessary sTV = do
@@ -366,7 +373,7 @@ notificationServer sTV client =
     export client "/org/freedesktop/Notifications"
         [ autoMethod "org.freedesktop.Notifications" "GetCapabilities" getCapabilities
         , autoMethod "org.freedesktop.Notifications" "Notify" (notify sTV)
-        , autoMethod "org.freedesktop.Notifications" "CloseNotification" closeNotification
+        , autoMethod "org.freedesktop.Notifications" "CloseNotification" (closeNotification sTV)
         , autoMethod "org.freedesktop.Notifications" "GetServerInformation" getServerInformation
         ]
 
@@ -420,10 +427,11 @@ notify sTV _ _ _ summary body _ _ timeout = do
         writeTVar sTV updatedState
         return $ fromNotificationID notificationID
 
--- TODO: implement CloseNotification
-closeNotification :: Word32 -> IO ()
-closeNotification w =
-    print $ "Closes Notification #" ++ show w
+-- | The CloseNotification DBus method removes the `Window` representing
+-- the `Notification`.
+closeNotification :: TVar AppState -> Word32 -> IO ()
+closeNotification sTV =
+    killNotificationByID sTV DBusCall . NotificationID
 
 -- Implement GetServerInformation
 getServerInformation :: IO (String, String, String, String)
