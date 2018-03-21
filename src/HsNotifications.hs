@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Lib where
+module HsNotifications where
 
 import Control.Applicative ((<|>))
 import Control.Arrow (first, second)
