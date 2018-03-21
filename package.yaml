@@ -24,6 +24,16 @@ dependencies:
 
 library:
   source-dirs: src
+  dependencies:
+  - containers
+  - dbus
+  - gi-gdk
+  - gi-glib
+  - gi-gtk
+  - stm
+  - text
+  - time
+  - X11
 
 executables:
   hs-notifications-exe:
