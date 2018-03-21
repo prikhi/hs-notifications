@@ -29,15 +29,27 @@ import qualified GI.GLib as GLib
 import qualified Graphics.X11.Xlib as Xlib
 
 
+closeKey :: Xlib.KeySym
+closeKey = Xlib.xK_w
+
+closeSingleMask :: Xlib.KeyMask
+closeSingleMask = Xlib.mod4Mask .|. Xlib.controlMask
+
+closeAllMask :: Xlib.KeyMask
+closeAllMask = closeSingleMask .|. Xlib.shiftMask
+
 notificationSpacing :: Int32
 notificationSpacing = 5
 
 offsetX :: Int32
 offsetX = 12
+
 offsetY :: Int32
 offsetY = 20
+
 verticalPadding :: Int32
 verticalPadding = 10
+
 horizontalPadding :: Int32
 horizontalPadding = 20
 
@@ -123,7 +135,7 @@ runGtk sTV = do
             provider <- Gtk.cssProviderNew
             Gtk.cssProviderLoadFromData provider
                 "window { border-color: #F92672; border-style: solid; border-width: 1px; }"
-            Gtk.styleContextAddProviderForScreen s provider 401
+            Gtk.styleContextAddProviderForScreen s provider 600
 
 
     -- Keybind Watchers
@@ -132,10 +144,10 @@ runGtk sTV = do
     -- TODO: Move to separate function
     -- All these Xlib calls can throw exceptions...
     closeOneShortcutThread <-
-        withShortcutThread Xlib.xK_w (Xlib.mod4Mask .|. Xlib.controlMask)
+        withShortcutThread closeKey closeSingleMask
             $ killFirstNotification sTV
     closeAllShortcutThread <-
-        withShortcutThread Xlib.xK_w (Xlib.mod4Mask .|. Xlib.controlMask .|. Xlib.shiftMask)
+        withShortcutThread closeKey closeAllMask
             $ killAllNotifications sTV
 
 
