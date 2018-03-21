@@ -232,6 +232,14 @@ grabKeyWithIgnoreMasks d k m w o p kb action =
             withGrabKey d k (m .|. ignoredModifierMask) w o p kb f
 
 
+-- | Get the X & Y Coordinates of the Primary `Monitor` on the default
+-- `Display`.
+--
+-- If the Primary Monitor cannot be identified, it uses the first monitor
+-- of the `Display`.
+--
+-- Exits with `exitFailure` if the Display could not be opened or a Monitor
+-- could not be found.
 getMonitorGeometryOrExit :: IO (Int32, Int32)
 getMonitorGeometryOrExit = do
     maybeMonitorGeometry <- Gdk.displayOpen "" >>= \case
@@ -247,6 +255,7 @@ getMonitorGeometryOrExit = do
                 <*> Gdk.getRectangleY g
         Nothing ->
             putStrLn "Could not find monitor." >> exitFailure
+
 
 -- | Create & Position a Notification Window & Attach the Click Handler.
 --
@@ -311,6 +320,10 @@ buildNotificationWindow n = do
 
     return win
 
+-- | Remove a `Notification`.
+--
+-- Destroy's the `Gtk.Window`, removes it from the `WindowList`, & adds it
+-- to the `appRemovalQueue`.
 deleteNotification :: TVar AppState -> ReasonClosed -> NotificationID -> Gtk.Window -> IO Bool
 deleteNotification sTV reason notificationID win =  do
     widgetHeight <- Gtk.widgetGetAllocatedHeight win
@@ -327,6 +340,10 @@ deleteNotification sTV reason notificationID win =  do
     Gtk.widgetDestroy win
     return True
 
+
+-- | Remove the first `Notification` in the `WindowList`.
+--
+-- Thread-safe.
 killFirstNotification :: TVar AppState -> IO ()
 killFirstNotification sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
     listToMaybe . appWindowList <$> readTVarIO sTV >>= \case
@@ -342,6 +359,7 @@ killNotificationByID :: TVar AppState -> ReasonClosed -> NotificationID -> IO ()
 killNotificationByID sTV reason notifID = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
     maybe (return False) (\(_, w) -> deleteNotification sTV reason notifID w >> return False)
     =<< find ((== notifID) . nID . fst) . appWindowList <$> readTVarIO sTV
+
 
 moveWindowsIfNecessary :: TVar AppState -> IO ()
 moveWindowsIfNecessary sTV = do
