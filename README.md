@@ -2,6 +2,8 @@
 
 A Super Simple Desktop Notification Server in Haskell.
 
+![A Screenshot Showing the Notification Windows Created by hs-notifications](http://bugs.sleepanarchy.com/projects/hs-notifications/repository/revisions/master/entry/screenshot.png  "hs-notifications Screenshot")
+
 `DBUS_SESSION_BUS_ADDRESS` needs to be set, which can be accomplished by adding
 `export $(dbus-launch)` to your `~/.xinitrc`.
 
