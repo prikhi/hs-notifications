@@ -201,7 +201,7 @@ runGtk sTV = do
     -- New / Expired Checkers
 
     -- Push New Notifications from the DBus Queue
-    void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 $ do
+    void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100 $ do
         mapM_ (uncurry $ handleQueueRequest sTV) <=< atomically $ do
             s <- readTVar sTV
             let ns = reverse $ appNotificationQueue s
@@ -210,7 +210,7 @@ runGtk sTV = do
         return True
 
     -- Expire Any Timed Out Notifications
-    void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 $ do
+    void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100 $ do
         currentTime <- getCurrentTime
         toDelete <- atomically $ do
             (expired, ok) <-
