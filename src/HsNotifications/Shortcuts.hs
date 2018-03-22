@@ -10,6 +10,8 @@ import qualified Graphics.X11.Xlib as Xlib
 
 
 -- | Fork a Thread to Run an Action When the Key & Mask are Pressed.
+-- TODO: Write safe wrappers around the Xlib functions, see
+-- https://github.com/xmonad/xmonad-contrib/issues/146
 withShortcutThread :: Xlib.KeySym -> Xlib.KeyMask -> IO () -> IO ThreadId
 withShortcutThread keySym modMask action =
     forkIO . bracket (Xlib.openDisplay "") Xlib.closeDisplay $ \display -> do

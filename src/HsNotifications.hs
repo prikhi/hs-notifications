@@ -63,7 +63,7 @@ run =
 
 data AppState
     = AppState
-        { appNotificationQueue :: [Notification]    -- ^ Newest notifications at front
+        { appNotificationQueue :: NotificationQueue     -- ^ Newest notifications at front
         , appRemovalQueue :: [(NotificationID, ReasonClosed)]
         , appWindowList :: [(Notification, Gtk.Window)] -- ^ Add new windows to end
         , appRootPosition :: (Int32, Int32)
@@ -110,6 +110,14 @@ data Notification
         , nExpirationTime :: Maybe UTCTime
         }
 
+-- | Newest notifications at front
+type NotificationQueue
+    = [ (Notification, QueueRequest) ]
+
+data QueueRequest
+    = Add
+    | Replace
+
 
 -- TODO: Pull all the constants & colors into a Config type
 -- TODO: Make left & right notification lists
@@ -153,13 +161,11 @@ runGtk sTV = do
 
     -- Push New Notifications from the DBus Queue
     void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 250 $ do
-        mapM_ (showNotification sTV)
-            . filter (\n -> nTitle n /= "" || nBody n /= "")
-            <=< atomically $ do
-                s <- readTVar sTV
-                let ns = reverse $ appNotificationQueue s
-                writeTVar sTV $ s { appNotificationQueue = [] }
-                return ns
+        mapM_ (uncurry $ handleQueueRequest sTV) <=< atomically $ do
+            s <- readTVar sTV
+            let ns = reverse $ appNotificationQueue s
+            writeTVar sTV $ s { appNotificationQueue = [] }
+            return ns
         return True
 
     -- Expire Any Timed Out Notifications
@@ -202,6 +208,16 @@ getMonitorGeometryOrExit = do
                 <*> Gdk.getRectangleY g
         Nothing ->
             putStrLn "Could not find monitor." >> exitFailure
+
+
+-- | Either Handle a QueueRequest for a Notification by Showing or
+-- Replacing It.
+handleQueueRequest :: TVar AppState -> Notification -> QueueRequest -> IO ()
+handleQueueRequest sTV n = \case
+    Add ->
+        when (nTitle n /= "" || nBody n /= "") $ showNotification sTV n
+    Replace ->
+        replaceNotification sTV n
 
 
 -- | Create & Position a Notification Window & Attach the Click Handler.
@@ -266,6 +282,49 @@ buildNotificationWindow n = do
         Gtk.containerAdd grid bodyLabel
 
     return win
+
+
+-- | Replace & Re-Render a Notification
+--
+--  Thread-safe.
+replaceNotification :: TVar AppState -> Notification -> IO ()
+replaceNotification sTV newN = do
+    maybeWindow <- atomically $ do
+        windowList <- appWindowList <$> readTVar sTV
+        let (newList, maybeWindow) = replace newN ([], Nothing) windowList
+        modifyTVar sTV $ \s -> s { appWindowList = newList }
+        return maybeWindow
+    maybeM maybeWindow $ \win -> do
+        maybeGrid <- join . listToMaybe <$> (mapM (Gtk.castTo Gtk.Container) =<< Gtk.containerGetChildren win)
+        maybeM maybeGrid $ \grid -> do
+            labels <- mapM (Gtk.castTo Gtk.Label) =<< Gtk.containerGetChildren grid
+            case labels of
+                (Just titleLabel : Just bodyLabel : _) -> do
+                    Gtk.labelSetMarkup titleLabel
+                        $ "<span color='#a6e22e' weight='bold'>" <> nTitle newN <> "</span>"
+                    Gtk.labelSetMarkup bodyLabel
+                        $ "<span color='#f8f8f0'>" <> nBody newN <> "</span>"
+                (Just titleLabel : _ ) ->
+                    Gtk.labelSetMarkup titleLabel
+                        $ "<span color='#a6e22e' weight='bold'>" <> nTitle newN <> "</span>"
+                (_ : Just bodyLabel : _ ) ->
+                    Gtk.labelSetMarkup bodyLabel
+                        $ "<span color='#f8f8f0'>" <> nBody newN <> "</span>"
+                _ ->
+                    return ()
+    moveWindowsIfNecessary sTV
+    where maybeM ma f =
+            maybe (return ()) f ma
+          replace v (processed, mWin) xs =
+            case xs of
+                [] ->
+                    (processed, mWin)
+                (n, w):rest ->
+                    if nID n == nID v then
+                        (processed ++ [(v, w)] ++ rest, Just w)
+                    else
+                        replace v (processed ++ [(n, w)], mWin) rest
+
 
 -- | Remove a `Notification`.
 --
@@ -380,7 +439,6 @@ getCapabilities = return
 
 
 -- implement Notify
--- TODO: Implement replace
 notify
     :: TVar AppState            -- ^ App State
     -> String                   -- ^ App Name
@@ -392,7 +450,7 @@ notify
     -> M.Map String Variant     -- ^ Hint
     -> Int32                    -- ^ Timeout in Milliseconds
     -> IO Word32                -- ^ Notification ID
-notify sTV _ _ _ summary body _ _ timeout = do
+notify sTV _ replaceID _ summary body _ _ timeout = do
     expirationTime <-
         if timeout > 0 then
             Just . addUTCTime (fromIntegral timeout / 1000) <$> getCurrentTime
@@ -400,8 +458,17 @@ notify sTV _ _ _ summary body _ _ timeout = do
             return Nothing
     atomically $ do
         state <- readTVar sTV
-        let notificationID =
-                appNextNotificationID state
+        let (notificationID, nextNotificationID, queueRequest) =
+                if replaceID == 0 then
+                    ( appNextNotificationID state
+                    , nextID $ appNextNotificationID state
+                    , Add
+                    )
+                else
+                    ( NotificationID replaceID
+                    , appNextNotificationID state
+                    , Replace
+                    )
             notification =
                 Notification
                     { nID = notificationID
@@ -411,8 +478,8 @@ notify sTV _ _ _ summary body _ _ timeout = do
                     }
             updatedState =
                 state
-                    { appNotificationQueue = notification : appNotificationQueue state
-                    , appNextNotificationID = nextID notificationID
+                    { appNotificationQueue = (notification, queueRequest) : appNotificationQueue state
+                    , appNextNotificationID = nextNotificationID
                     }
         writeTVar sTV updatedState
         return $ fromNotificationID notificationID
