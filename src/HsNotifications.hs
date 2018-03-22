@@ -212,8 +212,8 @@ runGtk sTV = do
         }
 
 
-    -- Attach Border Color Style
-    -- TODO: Separate function - do more of the themeing in css, generate css w/ library?
+    -- Attach Stylesheet
+    -- TODO: Separate function - do more of the themeing in css
     Gdk.screenGetDefault >>= \case
         Nothing ->
             return ()
@@ -233,27 +233,10 @@ runGtk sTV = do
 
 
     -- New / Expired Checkers
-
-    -- Push New Notifications from the DBus Queue
-    void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100 $ do
-        mapM_ (uncurry $ handleQueueRequest sTV) <=< atomically $ do
-            s <- readTVar sTV
-            let ns = reverse $ appNotificationQueue s
-            writeTVar sTV $ s { appNotificationQueue = [] }
-            return ns
-        return True
-
-    -- Expire Any Timed Out Notifications
-    void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100 $ do
-        currentTime <- getCurrentTime
-        toDelete <- atomically $ do
-            (expired, ok) <-
-                partition (maybe False (< currentTime) . nExpirationTime . fst)
-                . appWindowList <$> readTVar sTV
-            modifyTVar sTV $ \s -> s { appWindowList = ok }
-            return expired
-        mapM_ (uncurry (deleteNotification sTV Expired) . first nID) toDelete
-        return True
+    void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100
+        $ processNotificationQueue sTV
+            >> removeExpired sTV
+            >> return True
 
     -- Run the loop
     bracket (return [closeOneShortcutThread, closeAllShortcutThread]) (mapM killThread)
@@ -303,6 +286,35 @@ handleQueueRequest sTV n = \case
         when (nTitle n /= "" || nBody n /= "") $ showNotification sTV n
     Replace ->
         replaceNotification sTV n
+
+
+-- | Push New Notifications from the DBus Queue.
+--
+-- Thread-safe.
+processNotificationQueue :: TVar AppState -> IO ()
+processNotificationQueue sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
+    mapM_ (uncurry $ handleQueueRequest sTV) <=< atomically $ do
+        s <- readTVar sTV
+        let ns = reverse $ appNotificationQueue s
+        writeTVar sTV $ s { appNotificationQueue = [] }
+        return ns
+    return False
+
+
+-- | Expire Any Timed Out Notifications
+--
+-- Thread-safe.
+removeExpired :: TVar AppState -> IO ()
+removeExpired sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
+    currentTime <- getCurrentTime
+    toDelete <- atomically $ do
+        (expired, ok) <-
+            partition (maybe False (< currentTime) . nExpirationTime . fst)
+            . appWindowList <$> readTVar sTV
+        modifyTVar sTV $ \s -> s { appWindowList = ok }
+        return expired
+    mapM_ (uncurry (deleteNotification sTV Expired) . first nID) toDelete
+    return False
 
 
 -- | Create & Position a Notification Window & Attach the Click Handler.
