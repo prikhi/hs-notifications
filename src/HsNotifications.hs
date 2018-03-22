@@ -31,6 +31,9 @@ import qualified GI.GLib as GLib
 import qualified Graphics.X11.Xlib as Xlib
 
 
+-- Configuration
+-- TODO: Turn this into a record, have exe parse config from file
+
 closeKey :: Xlib.KeySym
 closeKey = Xlib.xK_w
 
@@ -54,6 +57,16 @@ verticalPadding = 10
 
 horizontalPadding :: Int32
 horizontalPadding = 20
+
+titleFormat :: T.Text -> T.Text
+titleFormat t =
+    "<span color='#a6e22e' weight='bold'>" <> t <> "</span>"
+
+bodyFormat :: T.Text -> T.Text
+bodyFormat b =
+    "<span color='#f8f8f0'>" <> b <> "</span>"
+
+
 
 -- Combine GTK + DBUS
 run :: IO ()
@@ -269,15 +282,13 @@ buildNotificationWindow n = do
     -- Add Labels
     when (nTitle n /= "") $ do
         titleLabel <- Gtk.labelNew Nothing
-        Gtk.labelSetMarkup titleLabel
-            $ "<span color='#a6e22e' weight='bold'>" <> nTitle n <> "</span>"
+        Gtk.labelSetMarkup titleLabel . titleFormat $ nTitle n
         Gtk.widgetSetHalign titleLabel Gtk.AlignStart
         Gtk.containerAdd grid titleLabel
 
     when (nBody n /= "") $ do
         bodyLabel <- Gtk.labelNew Nothing
-        Gtk.labelSetMarkup bodyLabel
-            $ "<span color='#f8f8f0'>" <> nBody n <> "</span>"
+        Gtk.labelSetMarkup bodyLabel . bodyFormat $ nBody n
         Gtk.widgetSetHalign bodyLabel Gtk.AlignStart
         Gtk.containerAdd grid bodyLabel
 
@@ -299,17 +310,11 @@ replaceNotification sTV newN = do
         maybeM maybeGrid $ \grid -> do
             labels <- mapM (Gtk.castTo Gtk.Label) =<< Gtk.containerGetChildren grid
             case labels of
-                (Just titleLabel : Just bodyLabel : _) -> do
-                    Gtk.labelSetMarkup titleLabel
-                        $ "<span color='#a6e22e' weight='bold'>" <> nTitle newN <> "</span>"
-                    Gtk.labelSetMarkup bodyLabel
-                        $ "<span color='#f8f8f0'>" <> nBody newN <> "</span>"
-                (Just titleLabel : _ ) ->
-                    Gtk.labelSetMarkup titleLabel
-                        $ "<span color='#a6e22e' weight='bold'>" <> nTitle newN <> "</span>"
-                (_ : Just bodyLabel : _ ) ->
-                    Gtk.labelSetMarkup bodyLabel
-                        $ "<span color='#f8f8f0'>" <> nBody newN <> "</span>"
+                (title : body : _) -> do
+                    maybeM title $ \l ->
+                        Gtk.labelSetMarkup l . titleFormat $ nTitle newN
+                    maybeM body $ \l ->
+                        Gtk.labelSetMarkup l . bodyFormat $ nBody newN
                 _ ->
                     return ()
     moveWindowsIfNecessary sTV
