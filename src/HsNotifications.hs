@@ -203,17 +203,7 @@ instance IsVariant ReasonClosed where
 -- TODO: Refactor so this is just like 5 function calls
 runGtk :: TVar AppState -> IO ()
 runGtk sTV = do
-    void $ Gtk.init Nothing
-
-    -- Attach Stylesheet
-    -- TODO: Separate function - do more of the themeing in css
-    Gdk.screenGetDefault >>= \case
-        Nothing ->
-            return ()
-        Just s -> do
-            provider <- Gtk.cssProviderNew
-            Gtk.cssProviderLoadFromData provider $ encodeUtf8 appStyle
-            Gtk.styleContextAddProviderForScreen s provider 600
+    initializeGtk
 
     -- Keybind Watchers
     closeOneShortcutThread <-
@@ -232,6 +222,18 @@ runGtk sTV = do
     -- Run the loop
     bracket (return [closeOneShortcutThread, closeAllShortcutThread]) (mapM killThread)
         $ const Gtk.main
+
+
+-- | Initialize GTK & Attach the Generated CSS to the Default `Gdk.Screen`.
+initializeGtk :: IO ()
+initializeGtk =
+    Gtk.init Nothing >> Gdk.screenGetDefault >>= \case
+        Nothing ->
+            return ()
+        Just s -> do
+            provider <- Gtk.cssProviderNew
+            Gtk.cssProviderLoadFromData provider $ encodeUtf8 appStyle
+            Gtk.styleContextAddProviderForScreen s provider 600
 
 
 -- | Get the X & Y Coordinates of the Primary `Monitor` on the default
