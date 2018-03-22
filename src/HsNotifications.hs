@@ -59,6 +59,10 @@ verticalPadding = 10
 horizontalPadding :: Int32
 horizontalPadding = 20
 
+font :: T.Text
+font =
+    "13 Dina"
+
 titleColor :: T.Text
 titleColor =
     "#A6E22E"
@@ -252,6 +256,7 @@ getMonitorGeometryOrExit = do
 appStyle :: T.Text
 appStyle = renderCSS $
     "window" ? do
+        "font" .= font
         "background-color" .= backgroundColor
         "border-style" .= "solid"
         "border-width" .= "1px"
