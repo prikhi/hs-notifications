@@ -71,6 +71,10 @@ borderColor :: T.Text
 borderColor =
     "#F92672"
 
+backgroundColor :: T.Text
+backgroundColor =
+    "#1B1D1E"
+
 titleFormat :: T.Text -> T.Text
 titleFormat t = T.concat
     [ "<span color='"
@@ -248,6 +252,7 @@ getMonitorGeometryOrExit = do
 appStyle :: T.Text
 appStyle = renderCSS $
     "window" ? do
+        "background-color" .= backgroundColor
         "border-style" .= "solid"
         "border-width" .= "1px"
         "border-color" .= borderColor
