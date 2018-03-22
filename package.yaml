@@ -37,7 +37,7 @@ library:
   - X11
 
 executables:
-  hs-notifications-exe:
+  hs-notifications:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
