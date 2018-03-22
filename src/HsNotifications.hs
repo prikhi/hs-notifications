@@ -390,10 +390,10 @@ replaceNotification sTV newN = do
         maybeM maybeGrid $ \grid -> do
             labels <- mapM (Gtk.castTo Gtk.Label) =<< Gtk.containerGetChildren grid
             case labels of
-                (title : body : _) -> do
+                (title : rest) -> do
                     maybeM title $ \l ->
                         Gtk.labelSetMarkup l . titleFormat $ nTitle newN
-                    maybeM body $ \l ->
+                    maybeM (join $ listToMaybe rest) $ \l ->
                         Gtk.labelSetMarkup l . bodyFormat $ nBody newN
                 _ ->
                     return ()
