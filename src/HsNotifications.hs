@@ -13,9 +13,10 @@ import Data.Bits ((.|.))
 import Data.Int (Int32)
 import Data.List (partition, find)
 import Data.Maybe (listToMaybe)
-import Data.String (fromString)
+import Data.Text.Encoding (encodeUtf8)
 import Data.Time.Clock (UTCTime, getCurrentTime, addUTCTime)
 import Data.Word (Word32)
+import Stitch ((?), (.=), renderCSS)
 import System.Exit (exitFailure)
 
 import DBus
@@ -23,7 +24,6 @@ import DBus.Client
 
 import HsNotifications.Shortcuts (withShortcutThread)
 
-import qualified Data.ByteString as BS
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified GI.Gtk as Gtk
@@ -179,13 +179,7 @@ runGtk sTV = do
             return ()
         Just s -> do
             provider <- Gtk.cssProviderNew
-            Gtk.cssProviderLoadFromData provider $ BS.concat
-                [ "window { border-color: "
-                , fromString $ T.unpack borderColor
-                , "; border-style: solid; border-width: 1px; }"
-
-                ]
-
+            Gtk.cssProviderLoadFromData provider $ encodeUtf8 appStyle
             Gtk.styleContextAddProviderForScreen s provider 600
 
 
@@ -249,6 +243,14 @@ getMonitorGeometryOrExit = do
                 <*> Gdk.getRectangleY g
         Nothing ->
             putStrLn "Could not find monitor." >> exitFailure
+
+
+appStyle :: T.Text
+appStyle = renderCSS $
+    "window" ? do
+        "border-style" .= "solid"
+        "border-width" .= "1px"
+        "border-color" .= borderColor
 
 
 -- | Either Handle a QueueRequest for a Notification by Showing or

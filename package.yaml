@@ -25,12 +25,12 @@ dependencies:
 library:
   source-dirs: src
   dependencies:
-  - bytestring
   - containers
   - dbus
   - gi-gdk
   - gi-glib
   - gi-gtk
+  - stitch
   - stm
   - text
   - time
