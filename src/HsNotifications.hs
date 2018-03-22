@@ -122,7 +122,9 @@ data AppState
 -- TODO: It'd probably be better to limit what is available between GTK
 -- & DBus instead of passing the whole state around.
 initialState :: IO (TVar AppState)
-initialState =
+initialState = do
+    rootPosition <- first (+ offsetX) . second (+ offsetY)
+        <$> getMonitorGeometryOrExit
     newTVarIO AppState
         { appNotificationQueue =
             []
@@ -131,9 +133,9 @@ initialState =
         , appWindowList =
             []
         , appRootPosition =
-            ( 0, 0 )
+            rootPosition
         , appNextPosition =
-            ( 0, 0 )
+            rootPosition
         , appNextNotificationID =
             NotificationID minBound
         }
@@ -201,16 +203,7 @@ instance IsVariant ReasonClosed where
 -- TODO: Refactor so this is just like 5 function calls
 runGtk :: TVar AppState -> IO ()
 runGtk sTV = do
-    -- Initialization
     void $ Gtk.init Nothing
-
-    rootPosition <- first (+ offsetX) . second (+ offsetY)
-        <$> getMonitorGeometryOrExit
-    atomically . modifyTVar sTV $ \s -> s
-        { appRootPosition = rootPosition
-        , appNextPosition = rootPosition
-        }
-
 
     -- Attach Stylesheet
     -- TODO: Separate function - do more of the themeing in css
@@ -222,7 +215,6 @@ runGtk sTV = do
             Gtk.cssProviderLoadFromData provider $ encodeUtf8 appStyle
             Gtk.styleContextAddProviderForScreen s provider 600
 
-
     -- Keybind Watchers
     closeOneShortcutThread <-
         withShortcutThread closeKey closeSingleMask
@@ -230,7 +222,6 @@ runGtk sTV = do
     closeAllShortcutThread <-
         withShortcutThread closeKey closeAllMask
             $ killAllNotifications sTV
-
 
     -- New / Expired Checkers
     void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100
