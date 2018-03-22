@@ -377,9 +377,12 @@ buildNotificationWindow n = do
 -- This replaces the Notification in the `WindowList` & updates the
 -- `Gtk.Window`'s `Gtk.Label`s.
 --
+-- TODO: If a body label is missing but the new notification has body text,
+-- we should create and add one.
+--
 --  Thread-safe.
 replaceNotification :: TVar AppState -> Notification -> IO ()
-replaceNotification sTV newN = do
+replaceNotification sTV newN = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
     maybeWindow <- atomically $ do
         windowList <- appWindowList <$> readTVar sTV
         let (newList, maybeWindow) = replace newN ([], Nothing) windowList
@@ -398,6 +401,7 @@ replaceNotification sTV newN = do
                 _ ->
                     return ()
     moveWindowsIfNecessary sTV
+    return False
     where maybeM ma f =
             maybe (return ()) f ma
           replace v (processed, mWin) xs =
