@@ -268,6 +268,7 @@ getMonitorGeometryOrExit = do
             putStrLn "Could not find monitor." >> exitFailure
 
 
+-- | Generate the CSS used to theme the Windows.
 appStyle :: T.Text
 appStyle = renderCSS $
     "window" ? do
