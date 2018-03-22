@@ -11,10 +11,10 @@ import Control.Exception (bracket)
 import Control.Monad ((<=<), (>=>), forever, when, void, join, foldM)
 import Data.Bits ((.|.))
 import Data.Int (Int32)
-import Data.Time.Clock (UTCTime, getCurrentTime, addUTCTime)
 import Data.List (partition, find)
 import Data.Maybe (listToMaybe)
-import Data.Monoid ((<>))
+import Data.String (fromString)
+import Data.Time.Clock (UTCTime, getCurrentTime, addUTCTime)
 import Data.Word (Word32)
 import System.Exit (exitFailure)
 
@@ -23,6 +23,7 @@ import DBus.Client
 
 import HsNotifications.Shortcuts (withShortcutThread)
 
+import qualified Data.ByteString as BS
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified GI.Gtk as Gtk
@@ -58,13 +59,36 @@ verticalPadding = 10
 horizontalPadding :: Int32
 horizontalPadding = 20
 
+titleColor :: T.Text
+titleColor =
+    "#A6E22E"
+
+bodyColor :: T.Text
+bodyColor =
+    "#F8F8F0"
+
+borderColor :: T.Text
+borderColor =
+    "#F92672"
+
 titleFormat :: T.Text -> T.Text
-titleFormat t =
-    "<span color='#a6e22e' weight='bold'>" <> t <> "</span>"
+titleFormat t = T.concat
+    [ "<span color='"
+    , titleColor
+    , "' weight='bold'>"
+    , t
+    , "</span>"
+    ]
 
 bodyFormat :: T.Text -> T.Text
-bodyFormat b =
-    "<span color='#f8f8f0'>" <> b <> "</span>"
+bodyFormat b = T.concat
+    [ "<span color='"
+    , bodyColor
+    , "'>"
+    , b
+    , "</span>"
+    ]
+
 
 
 
@@ -132,9 +156,8 @@ data QueueRequest
     | Replace
 
 
--- TODO: Pull all the constants & colors into a Config type
 -- TODO: Make left & right notification lists
--- TODO: Make customizable format strings matching on app name
+-- TODO: Make customizable format strings matching on app name, urgency
 -- TODO: Refactor so this is just like 5 function calls
 runGtk :: TVar AppState -> IO ()
 runGtk sTV = do
@@ -156,8 +179,13 @@ runGtk sTV = do
             return ()
         Just s -> do
             provider <- Gtk.cssProviderNew
-            Gtk.cssProviderLoadFromData provider
-                "window { border-color: #F92672; border-style: solid; border-width: 1px; }"
+            Gtk.cssProviderLoadFromData provider $ BS.concat
+                [ "window { border-color: "
+                , fromString $ T.unpack borderColor
+                , "; border-style: solid; border-width: 1px; }"
+
+                ]
+
             Gtk.styleContextAddProviderForScreen s provider 600
 
 
