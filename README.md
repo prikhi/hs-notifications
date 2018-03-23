@@ -4,6 +4,7 @@ A Super Simple Desktop Notification Server in Haskell.
 
 ![A Screenshot Showing the Notification Windows Created by hs-notifications](http://bugs.sleepanarchy.com/projects/hs-notifications/repository/revisions/master/entry/screenshot.png  "hs-notifications Screenshot")
 
+
 `DBUS_SESSION_BUS_ADDRESS` needs to be set, which can be accomplished by adding
 `export $(dbus-launch)` to your `~/.xinitrc`.
 
@@ -23,19 +24,27 @@ Run:
 Install to `~/.local/bin`:
 
     stack install
+    export PATH="$HOME/.local/bin/:$PATH"
+    hs-notifications
 
 `Mod4-Shift-Ctrl-w` removes all the notifications. `Mod4-Ctrl-w` removes the
 oldest notification. You can also click them.
 
-My eventual goal is to import this into my xmonad config & just run it with
-`forkProcess`.
+You can change the colors & keybindings by creating a
+`~/.config/hs-notifications/config.ini`, see the `config-example.ini` for
+available options.
 
+My plan is to import this into my xmond config, build my notification Config in
+there, & use `forkProcess` to run the application.
+
+I've built this to my needs - if you would like to use this but want some more
+features or customizability, feel free to open an issue.
 
 
 ## Architecture
 
-This was hacked together in a day or so, so there's lots of room for
-improvement, but it's something like this:
+This was hacked together in a day or so, there's lots of room for
+improvement.
 
 There's a DBus client & a GTK app. Main just initializes the shared state,
 forks the DBus client and starts the GTk app.
@@ -61,8 +70,8 @@ adding the new window's height & some spacing.
 
 ### Removing Notifications
 
-You can click notifications to remove them, or press `Mod4-Ctrl-w` to remove
-the oldest.
+You can click notifications to remove them, press `Mod4-Ctrl-w` to remove
+the oldest, or press `Mod4-Ctrl-Shift-w` to remove them all.
 
 Removing a notification updates the window list, re-adjusts the positions of
 windows below it, & adds its `NotificationID` to the removal queue.

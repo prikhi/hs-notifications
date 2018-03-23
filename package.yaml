@@ -22,6 +22,8 @@ description:         Please see the README on Github at <https://github.com/prik
 dependencies:
 - base >= 4.7 && < 5
 - data-default
+- text
+- X11
 
 library:
   source-dirs: src
@@ -33,9 +35,7 @@ library:
   - gi-gtk
   - stitch
   - stm
-  - text
   - time
-  - X11
 
 executables:
   hs-notifications:
@@ -47,6 +47,9 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - hs-notifications
+    - config-ini
+    - directory
+    - xdg-basedir
 
 tests:
   hs-notifications-test:
