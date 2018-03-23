@@ -1,7 +1,9 @@
 module Main where
 
-import HsNotifications
+import Data.Default (def)
+
+import HsNotifications (run)
 
 main :: IO ()
 main =
-    run
+    run def

@@ -9,7 +9,6 @@ import Control.Concurrent (threadDelay, forkIO, killThread)
 import Control.Concurrent.STM (TVar, atomically, newTVarIO, modifyTVar, readTVar, readTVarIO, writeTVar)
 import Control.Exception (bracket)
 import Control.Monad ((<=<), (>=>), forever, when, void, join, foldM)
-import Data.Bits ((.|.))
 import Data.Int (Int32)
 import Data.List (partition, find)
 import Data.Maybe (listToMaybe, fromMaybe)
@@ -22,6 +21,7 @@ import System.Exit (exitFailure)
 import DBus
 import DBus.Client
 
+import HsNotifications.Config (Config(..))
 import HsNotifications.Shortcuts (withShortcutThread)
 
 import qualified Data.Map as M
@@ -29,101 +29,15 @@ import qualified Data.Text as T
 import qualified GI.Gtk as Gtk
 import qualified GI.Gdk as Gdk
 import qualified GI.GLib as GLib
-import qualified Graphics.X11.Xlib as Xlib
-
-
--- Configuration
--- TODO: Turn this into a record, have exe parse config from file, split
--- into module
-
-closeKey :: Xlib.KeySym
-closeKey = Xlib.xK_w
-
-closeSingleMask :: Xlib.KeyMask
-closeSingleMask = Xlib.mod4Mask .|. Xlib.controlMask
-
-closeAllMask :: Xlib.KeyMask
-closeAllMask = closeSingleMask .|. Xlib.shiftMask
-
-notificationSpacing :: Int32
-notificationSpacing = 5
-
-offsetX :: Int32
-offsetX = 12
-
-offsetY :: Int32
-offsetY = 20
-
-verticalPadding :: Int32
-verticalPadding = 10
-
-horizontalPadding :: Int32
-horizontalPadding = 20
-
-font :: T.Text
-font =
-    "13 Dina"
-
-titleColor :: T.Text
-titleColor =
-    "#A6E22E"
-
-titleCriticalColor :: T.Text
-titleCriticalColor =
-    "#FF0000"
-
-titleLowColor :: T.Text
-titleLowColor =
-    bodyColor
-
-bodyColor :: T.Text
-bodyColor =
-    "#F8F8F0"
-
-borderColor :: T.Text
-borderColor =
-    "#F92672"
-
-backgroundColor :: T.Text
-backgroundColor =
-    "#1B1D1E"
-
-titleFormat :: Notification -> T.Text
-titleFormat n =
-    let
-        color =
-            case nUrgency n of
-                Low ->
-                    titleLowColor
-                Normal ->
-                    titleColor
-                Critical ->
-                    titleCriticalColor
-    in
-        T.concat
-            [ "<span color='"
-            , color
-            , "' weight='bold'>"
-            , nTitle n
-            , "</span>"
-            ]
-
-bodyFormat :: T.Text -> T.Text
-bodyFormat b = T.concat
-    [ "<span color='"
-    , bodyColor
-    , "'>"
-    , b
-    , "</span>"
-    ]
-
-
 
 
 -- | Initialize the `AppState`, fork the DBus client & run the GTK app.
-run :: IO ()
-run =
-    initialState >>= \s -> forkIO (connectAndServe s) >> runGtk s
+--
+-- TODO: `Config` should be a `ReaderT`, `TVar AppState` should be
+-- a `StateT`, transformer stack should implement `MonadIO`.
+run :: Config -> IO ()
+run config =
+    initialState config >>= \s -> forkIO (connectAndServe config s) >> runGtk config s
 
 
 data AppState
@@ -140,9 +54,9 @@ data AppState
 --
 -- TODO: It'd probably be better to limit what is available between GTK
 -- & DBus instead of passing the whole state around.
-initialState :: IO (TVar AppState)
-initialState = do
-    rootPosition <- first (+ offsetX) . second (+ offsetY)
+initialState :: Config -> IO (TVar AppState)
+initialState c = do
+    rootPosition <- first (+ placementX c) . second (+ placementY c)
         <$> getMonitorGeometryOrExit
     newTVarIO AppState
         { appNotificationQueue =
@@ -237,23 +151,22 @@ instance IsVariant ReasonClosed where
 
 
 -- TODO: Make left & right notification lists
--- TODO: Make customizable format strings matching on app name, urgency
-runGtk :: TVar AppState -> IO ()
-runGtk sTV = do
-    initializeGtk
+runGtk :: Config -> TVar AppState -> IO ()
+runGtk c sTV = do
+    initializeGtk c
 
     -- Keybind Watchers
     closeOneShortcutThread <-
-        withShortcutThread closeKey closeSingleMask
-            $ killFirstNotification sTV
+        withShortcutThread (closeKey c) (closeSingleMask c)
+            $ killFirstNotification c sTV
     closeAllShortcutThread <-
-        withShortcutThread closeKey closeAllMask
-            $ killAllNotifications sTV
+        withShortcutThread (closeKey c) (closeAllMask c)
+            $ killAllNotifications c sTV
 
     -- New / Expired Checkers
     void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100
-        $ processNotificationQueue sTV
-            >> removeExpired sTV
+        $ processNotificationQueue c sTV
+            >> removeExpired c sTV
             >> return True
 
     -- Run the loop
@@ -262,14 +175,14 @@ runGtk sTV = do
 
 
 -- | Initialize GTK & Attach the Generated CSS to the Default `Gdk.Screen`.
-initializeGtk :: IO ()
-initializeGtk =
+initializeGtk :: Config -> IO ()
+initializeGtk c =
     Gtk.init Nothing >> Gdk.screenGetDefault >>= \case
         Nothing ->
             return ()
         Just s -> do
             provider <- Gtk.cssProviderNew
-            Gtk.cssProviderLoadFromData provider $ encodeUtf8 appStyle
+            Gtk.cssProviderLoadFromData provider . encodeUtf8 $ appStyle c
             Gtk.styleContextAddProviderForScreen s provider 600
 
 
@@ -299,32 +212,33 @@ getMonitorGeometryOrExit = do
 
 
 -- | Generate the CSS used to theme the Windows.
-appStyle :: T.Text
-appStyle = renderCSS $
+appStyle :: Config -> T.Text
+appStyle c = renderCSS $
     "window" ? do
-        "font" .= font
-        "background-color" .= backgroundColor
+        when (font c /= "") $
+            "font" .= font c
+        "background-color" .= backgroundColor c
         "border-style" .= "solid"
         "border-width" .= "1px"
-        "border-color" .= borderColor
+        "border-color" .= borderColor c
 
 
 -- | Either Handle a QueueRequest for a Notification by Showing or
 -- Replacing It.
-handleQueueRequest :: TVar AppState -> Notification -> QueueRequest -> IO ()
-handleQueueRequest sTV n = \case
+handleQueueRequest :: Config -> TVar AppState -> Notification -> QueueRequest -> IO ()
+handleQueueRequest c sTV n = \case
     Add ->
-        when (nTitle n /= "" || nBody n /= "") $ showNotification sTV n
+        when (nTitle n /= "" || nBody n /= "") $ showNotification c sTV n
     Replace ->
-        replaceNotification sTV n
+        replaceNotification c sTV n
 
 
 -- | Push New Notifications from the DBus Queue.
 --
 -- Thread-safe.
-processNotificationQueue :: TVar AppState -> IO ()
-processNotificationQueue sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
-    mapM_ (uncurry $ handleQueueRequest sTV) <=< atomically $ do
+processNotificationQueue :: Config -> TVar AppState -> IO ()
+processNotificationQueue c sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
+    mapM_ (uncurry $ handleQueueRequest c sTV) <=< atomically $ do
         s <- readTVar sTV
         let ns = reverse $ appNotificationQueue s
         writeTVar sTV $ s { appNotificationQueue = [] }
@@ -335,8 +249,8 @@ processNotificationQueue sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
 -- | Expire Any Timed Out Notifications
 --
 -- Thread-safe.
-removeExpired :: TVar AppState -> IO ()
-removeExpired sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
+removeExpired :: Config -> TVar AppState -> IO ()
+removeExpired c sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
     currentTime <- getCurrentTime
     toDelete <- atomically $ do
         (expired, ok) <-
@@ -344,19 +258,19 @@ removeExpired sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
             . appWindowList <$> readTVar sTV
         modifyTVar sTV $ \s -> s { appWindowList = ok }
         return expired
-    mapM_ (uncurry (deleteNotification sTV Expired) . first nID) toDelete
+    mapM_ (uncurry (deleteNotification c sTV Expired) . first nID) toDelete
     return False
 
 
 -- | Create & Position a Notification Window & Attach the Click Handler.
 --
 -- Updates the `appNextPosition` & `appWindowList` state variables.
-showNotification :: TVar AppState -> Notification -> IO ()
-showNotification sTV n = do
+showNotification :: Config -> TVar AppState -> Notification -> IO ()
+showNotification c sTV n = do
     (winX, winY) <- appNextPosition <$> readTVarIO sTV
-    win <- buildNotificationWindow n
+    win <- buildNotificationWindow c n
     void . Gtk.onWidgetButtonPressEvent win . const
-        $ deleteNotification sTV Dismissed (nID n) win
+        $ deleteNotification c sTV Dismissed (nID n) win
     Gtk.windowMove win winX winY
     Gtk.widgetShowAll win
 
@@ -364,7 +278,7 @@ showNotification sTV n = do
     atomically $ modifyTVar sTV $ \s -> s
         { appNextPosition =
             ( fst $ appNextPosition s
-            , winHeight + snd (appNextPosition s) + notificationSpacing
+            , winHeight + snd (appNextPosition s) + spacing c
             )
         , appWindowList =
             appWindowList s ++ [(n, win)]
@@ -377,8 +291,8 @@ showNotification sTV n = do
 -- text.
 --
 -- TODO: Add Icons
-buildNotificationWindow :: Notification -> IO Gtk.Window
-buildNotificationWindow n = do
+buildNotificationWindow :: Config -> Notification -> IO Gtk.Window
+buildNotificationWindow c n = do
     win <- Gtk.windowNew Gtk.WindowTypeToplevel
     Gtk.setWindowTypeHint win Gdk.WindowTypeHintNotification
     Gtk.windowSetKeepAbove win True
@@ -390,11 +304,11 @@ buildNotificationWindow n = do
     Gtk.orientableSetOrientation grid Gtk.OrientationVertical
 
     -- Set Padding
-    mapM_ (\f -> f grid verticalPadding)
+    mapM_ (\f -> f grid $ paddingY c)
         [ Gtk.widgetSetMarginTop
         , Gtk.widgetSetMarginBottom
         ]
-    mapM_ (\f -> f grid horizontalPadding)
+    mapM_ (\f -> f grid $ paddingX c)
         [ Gtk.widgetSetMarginStart
         , Gtk.widgetSetMarginEnd
         ]
@@ -402,13 +316,13 @@ buildNotificationWindow n = do
     -- Add Labels
     when (nTitle n /= "") $ do
         titleLabel <- Gtk.labelNew Nothing
-        Gtk.labelSetMarkup titleLabel $ titleFormat n
+        Gtk.labelSetMarkup titleLabel . titleFormat c $ nTitle n
         Gtk.widgetSetHalign titleLabel Gtk.AlignStart
         Gtk.containerAdd grid titleLabel
 
     when (nBody n /= "") $ do
         bodyLabel <- Gtk.labelNew Nothing
-        Gtk.labelSetMarkup bodyLabel . bodyFormat $ nBody n
+        Gtk.labelSetMarkup bodyLabel . bodyFormat c $ nBody n
         Gtk.widgetSetHalign bodyLabel Gtk.AlignStart
         Gtk.containerAdd grid bodyLabel
 
@@ -424,8 +338,8 @@ buildNotificationWindow n = do
 -- we should create and add one.
 --
 --  Thread-safe.
-replaceNotification :: TVar AppState -> Notification -> IO ()
-replaceNotification sTV newN = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
+replaceNotification :: Config -> TVar AppState -> Notification -> IO ()
+replaceNotification c sTV newN = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
     maybeWindow <- atomically $ do
         windowList <- appWindowList <$> readTVar sTV
         let (newList, maybeWindow) = replace newN ([], Nothing) windowList
@@ -438,12 +352,12 @@ replaceNotification sTV newN = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
             case labels of
                 (title : rest) -> do
                     maybeM title $ \l ->
-                        Gtk.labelSetMarkup l $ titleFormat newN
+                        Gtk.labelSetMarkup l . titleFormat c $ nTitle newN
                     maybeM (join $ listToMaybe rest) $ \l ->
-                        Gtk.labelSetMarkup l . bodyFormat $ nBody newN
+                        Gtk.labelSetMarkup l . bodyFormat c $ nBody newN
                 _ ->
                     return ()
-    moveWindowsIfNecessary sTV
+    moveWindowsIfNecessary c sTV
     return False
     where maybeM ma f =
             maybe (return ()) f ma
@@ -462,19 +376,19 @@ replaceNotification sTV newN = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
 --
 -- Destroy's the `Gtk.Window`, removes it from the `WindowList`, & adds it
 -- to the `appRemovalQueue`.
-deleteNotification :: TVar AppState -> ReasonClosed -> NotificationID -> Gtk.Window -> IO Bool
-deleteNotification sTV reason notificationID win =  do
+deleteNotification :: Config -> TVar AppState -> ReasonClosed -> NotificationID -> Gtk.Window -> IO Bool
+deleteNotification c sTV reason notificationID win =  do
     widgetHeight <- Gtk.widgetGetAllocatedHeight win
     atomically . modifyTVar sTV $ \s -> s
         { appWindowList =
             filter ((/= notificationID) . nID . fst) $ appWindowList s
         , appNextPosition =
-            second (\y -> y - widgetHeight - notificationSpacing)
+            second (\y -> y - widgetHeight - spacing c)
                 $ appNextPosition s
         , appRemovalQueue =
             (notificationID, reason) : appRemovalQueue s
         }
-    moveWindowsIfNecessary sTV
+    moveWindowsIfNecessary c sTV
     Gtk.widgetDestroy win
     return True
 
@@ -482,36 +396,36 @@ deleteNotification sTV reason notificationID win =  do
 -- | Remove the first `Notification` in the `WindowList`.
 --
 -- Thread-safe.
-killFirstNotification :: TVar AppState -> IO ()
-killFirstNotification sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
+killFirstNotification :: Config -> TVar AppState -> IO ()
+killFirstNotification c sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
     listToMaybe . appWindowList <$> readTVarIO sTV >>= \case
         Just (n, win) ->
-            deleteNotification sTV Dismissed (nID n) win >> return False
+            deleteNotification c sTV Dismissed (nID n) win >> return False
         Nothing ->
             return False
 
 -- | Remove all `Notification`s currently in the `WindowList`.
 --
 --  Thread-safe.
-killAllNotifications :: TVar AppState -> IO ()
-killAllNotifications sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
+killAllNotifications :: Config -> TVar AppState -> IO ()
+killAllNotifications c sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
     appWindowList <$> readTVarIO sTV
-        >>= mapM_ (uncurry (deleteNotification sTV Dismissed) . first nID)
+        >>= mapM_ (uncurry (deleteNotification c sTV Dismissed) . first nID)
         >> return False
 
 -- | Remove the `Notification` with the given `NotificationID`.
 --
 -- Thread-safe.
-killNotificationByID :: TVar AppState -> ReasonClosed -> NotificationID -> IO ()
-killNotificationByID sTV reason notifID = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
-    maybe (return False) (\(_, w) -> deleteNotification sTV reason notifID w >> return False)
+killNotificationByID :: Config -> TVar AppState -> ReasonClosed -> NotificationID -> IO ()
+killNotificationByID c sTV reason notifID = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
+    maybe (return False) (\(_, w) -> deleteNotification c sTV reason notifID w >> return False)
     =<< find ((== notifID) . nID . fst) . appWindowList <$> readTVarIO sTV
 
 
 -- | Calculate the Actual & Expected Position of the Notifications & Move
 -- Them If Necessary.
-moveWindowsIfNecessary :: TVar AppState -> IO ()
-moveWindowsIfNecessary sTV = do
+moveWindowsIfNecessary :: Config -> TVar AppState -> IO ()
+moveWindowsIfNecessary c sTV = do
     state <- readTVarIO sTV
     (_, windowsAndPositions) <- foldM nextPosition (appRootPosition state, [])
         $ appWindowList state
@@ -519,7 +433,7 @@ moveWindowsIfNecessary sTV = do
     where
         nextPosition ((x, y), processed) (_, win) = do
             widgetHeight <- Gtk.widgetGetAllocatedHeight win
-            let nextY = y + widgetHeight + notificationSpacing
+            let nextY = y + widgetHeight + spacing c
             return ((x, nextY), (win, (x, y)) : processed)
         move (win, (x, y)) = do
               currentY <- snd <$> Gtk.windowGetPosition win
@@ -532,13 +446,13 @@ moveWindowsIfNecessary sTV = do
 
 -- | Connect to the DBus Session as the Notification Daemon & Handle the
 -- Required Messages.
-connectAndServe :: TVar AppState -> IO ()
-connectAndServe sTV = bracket connectSession disconnect $ \client -> do
+connectAndServe :: Config -> TVar AppState -> IO ()
+connectAndServe c sTV = bracket connectSession disconnect $ \client -> do
     requestResult <- requestName client "org.freedesktop.Notifications" []
     when (requestResult /= NamePrimaryOwner) $
         putStrLn "Another notification server is already started"
             >> exitFailure
-    notificationServer sTV client
+    notificationServer c sTV client
     forever $ do
         removals <- atomically $ do
             nis <- appRemovalQueue <$> readTVar sTV
@@ -549,12 +463,12 @@ connectAndServe sTV = bracket connectSession disconnect $ \client -> do
 
 -- | Implement the `org.freedesktop.Notifications` DBus interface at a path
 -- of `/org/freedesktop/Notifications`.
-notificationServer :: TVar AppState -> Client -> IO ()
-notificationServer sTV client =
+notificationServer :: Config -> TVar AppState -> Client -> IO ()
+notificationServer c sTV client =
     export client "/org/freedesktop/Notifications"
         [ autoMethod "org.freedesktop.Notifications" "GetCapabilities" getCapabilities
         , autoMethod "org.freedesktop.Notifications" "Notify" (notify sTV)
-        , autoMethod "org.freedesktop.Notifications" "CloseNotification" (closeNotification sTV)
+        , autoMethod "org.freedesktop.Notifications" "CloseNotification" (closeNotification c sTV)
         , autoMethod "org.freedesktop.Notifications" "GetServerInformation" getServerInformation
         ]
 
@@ -624,9 +538,9 @@ notify sTV _ replaceID _ summary body _ hints timeout = do
 
 -- | The CloseNotification DBus method removes the `Window` representing
 -- the `Notification`.
-closeNotification :: TVar AppState -> Word32 -> IO ()
-closeNotification sTV =
-    killNotificationByID sTV DBusCall . NotificationID
+closeNotification :: Config -> TVar AppState -> Word32 -> IO ()
+closeNotification c sTV =
+    killNotificationByID c sTV DBusCall . NotificationID
 
 
 -- | Return the Sever's Name, Vendor, Version, & Spec Version.
