@@ -6,6 +6,8 @@ import Data.Default (Default(def))
 import Data.Int (Int32)
 import Data.Monoid ((<>))
 
+import HsNotifications.Models (Notification(nTitle, nUrgency), Urgency(..))
+
 import qualified Data.Text as T
 import qualified Graphics.X11.Xlib as Xlib
 
@@ -33,7 +35,7 @@ data Config
         , bodyColor :: T.Text
         , borderColor :: T.Text
         , backgroundColor :: T.Text
-        , titleFormat :: T.Text -> T.Text -- TODO: Make this take a `Notification` again
+        , titleFormat :: Notification -> T.Text
         , bodyFormat :: T.Text -> T.Text
         }
 
@@ -68,15 +70,25 @@ instance Default Config where
             , titleCriticalColor =
                 "#FF0000"
             , titleLowColor =
-                "#F8F8F0"
+                "#FD971F"
             , bodyColor =
                 "#F8F8F0"
             , borderColor =
                 "#F92672"
             , backgroundColor =
                 "#1B1D1E"
-            , titleFormat = \t ->
-                "<span font-weight='bold' color='" <> titleNormalColor def <> "'>" <> t <> "</span>"
+            , titleFormat = \n ->
+                let
+                    titleColor =
+                        case nUrgency n of
+                            Low ->
+                                titleLowColor def
+                            Normal ->
+                                titleNormalColor def
+                            Critical ->
+                                titleCriticalColor def
+                in
+                    "<span font-weight='bold' color='" <> titleColor <> "'>" <> nTitle n <> "</span>"
             , bodyFormat = \b ->
                 "<span color='" <> bodyColor def <> "'>" <> b <> "</span>"
             }

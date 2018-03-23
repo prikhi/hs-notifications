@@ -229,7 +229,7 @@ buildNotificationWindow c n = do
     -- Add Labels
     when (nTitle n /= "") $ do
         titleLabel <- Gtk.labelNew Nothing
-        Gtk.labelSetMarkup titleLabel . titleFormat c $ nTitle n
+        Gtk.labelSetMarkup titleLabel $ titleFormat c n
         Gtk.widgetSetHalign titleLabel Gtk.AlignStart
         Gtk.containerAdd grid titleLabel
 
@@ -265,7 +265,7 @@ replaceNotification c sTV newN = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT
             case labels of
                 (title : rest) -> do
                     maybeM title $ \l ->
-                        Gtk.labelSetMarkup l . titleFormat c $ nTitle newN
+                        Gtk.labelSetMarkup l $ titleFormat c newN
                     maybeM (join $ listToMaybe rest) $ \l ->
                         Gtk.labelSetMarkup l . bodyFormat c $ nBody newN
                 _ ->
