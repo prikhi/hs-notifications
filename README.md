@@ -41,6 +41,23 @@ I've built this to my needs - if you would like to use this but want some more
 features or customizability, feel free to open an issue.
 
 
+## TODO
+
+* Add icon support
+* Add ability to override colors & icon - matching by app name or title/body
+  text. Specify overrides in config file sections.
+* Add action support?
+* Refactor to `ReaderT Env IO`
+
+    * Add `data Env = Env Config AppState`
+    * Use TQueue for Queues instead of wrapping all of `AppState` in a TVar.
+    * Write typeclasses for accessing & modifying small parts of the Env.
+      E.g., `class Monad m => RootPosition m where getRootPosition :: m (Int32, Int32)`
+    * Refactor function types to use typeclasses to restrict their scope -
+      instead of passing the entire Config & AppState around & using the IO
+      monad everywhere.
+
+
 ## Architecture
 
 This was hacked together in a day or so, there's lots of room for

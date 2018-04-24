@@ -289,6 +289,10 @@ replaceNotification c sTV newN = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT
 --
 -- Destroy's the `Gtk.Window`, removes it from the `WindowList`, & adds it
 -- to the `appRemovalQueue`.
+--
+-- TODO: Refactor into function that just removes from AppState & another
+-- that also calls widget destroy & move if necessary, so we can move only
+-- once in killAllNotifications
 deleteNotification :: Config -> TVar AppState -> ReasonClosed -> NotificationID -> Gtk.Window -> IO Bool
 deleteNotification c sTV reason notificationID win =  do
     widgetHeight <- Gtk.widgetGetAllocatedHeight win
@@ -356,6 +360,7 @@ moveWindowsIfNecessary c sTV = do
 
 
 -- DBUS
+-- TODO: Move into HsNotifications.DBus module.
 
 -- | Connect to the DBus Session as the Notification Daemon & Handle the
 -- Required Messages.
