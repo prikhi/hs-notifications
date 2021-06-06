@@ -9,6 +9,7 @@ import Control.Concurrent (threadDelay, forkIO, killThread)
 import Control.Concurrent.STM (TVar, atomically, newTVarIO, modifyTVar, readTVar, readTVarIO, writeTVar)
 import Control.Exception (bracket)
 import Control.Monad ((<=<), forever, when, void, join, foldM)
+import Data.Bifunctor (bimap)
 import Data.Int (Int32)
 import Data.List (partition, find)
 import Data.Maybe (listToMaybe, fromMaybe)
@@ -46,7 +47,7 @@ run config =
 -- & DBus instead of passing the whole state around.
 initialState :: Config -> IO (TVar AppState)
 initialState c = do
-    rootPosition <- first (+ placementX c) . second (+ placementY c)
+    rootPosition <- bimap (+ placementX c) (+ placementY c)
         <$> getMonitorGeometryOrExit
     newTVarIO AppState
         { appNotificationQueue =
@@ -383,12 +384,16 @@ connectAndServe c sTV = bracket connectSession disconnect $ \client -> do
 -- of `/org/freedesktop/Notifications`.
 notificationServer :: Config -> TVar AppState -> Client -> IO ()
 notificationServer c sTV client =
-    export client "/org/freedesktop/Notifications"
-        [ autoMethod "org.freedesktop.Notifications" "GetCapabilities" getCapabilities
-        , autoMethod "org.freedesktop.Notifications" "Notify" (notify sTV)
-        , autoMethod "org.freedesktop.Notifications" "CloseNotification" (closeNotification c sTV)
-        , autoMethod "org.freedesktop.Notifications" "GetServerInformation" getServerInformation
-        ]
+    export client "/org/freedesktop/Notifications" defaultInterface
+        { interfaceName = "org.freedesktop.Notifications"
+        , interfaceMethods =
+            [ autoMethod "GetCapabilities" getCapabilities
+            , autoMethod "Notify" (notify sTV)
+            , autoMethod "CloseNotification" (closeNotification c sTV)
+            , autoMethod "GetServerInformation" getServerInformation
+            ]
+        }
+
 
 
 -- DBus Messages

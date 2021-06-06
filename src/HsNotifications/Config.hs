@@ -4,7 +4,6 @@ module HsNotifications.Config where
 import Data.Bits ((.|.))
 import Data.Default (Default(def))
 import Data.Int (Int32)
-import Data.Monoid ((<>))
 
 import HsNotifications.Models (Notification(nTitle, nUrgency), Urgency(..))
 
