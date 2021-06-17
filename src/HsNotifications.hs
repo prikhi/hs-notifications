@@ -15,6 +15,7 @@ import Data.List (partition, find)
 import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time.Clock (getCurrentTime, addUTCTime)
+import Data.Version (showVersion)
 import Data.Word (Word32)
 import Stitch ((?), (.=), renderCSS)
 import System.Exit (exitFailure)
@@ -25,6 +26,7 @@ import DBus.Client
 import HsNotifications.Config (Config(..))
 import HsNotifications.Models
 import HsNotifications.Shortcuts (withShortcutThread)
+import Paths_hs_notifications (version)
 
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -471,7 +473,7 @@ getServerInformation :: IO (String, String, String, String)
 getServerInformation = return
     ( "hs-notifications"
     , "prikhi"
-    , "0.1.0.0"
+    , showVersion version
     , "1.2"
     )
 
