@@ -8,7 +8,7 @@ import Control.Arrow (first, second)
 import Control.Concurrent (threadDelay, forkIO, killThread)
 import Control.Concurrent.STM (TVar, atomically, newTVarIO, modifyTVar, readTVar, readTVarIO, writeTVar)
 import Control.Exception (bracket)
-import Control.Monad ((<=<), forever, when, void, join, foldM)
+import Control.Monad ((<=<), forever, when, void, join, foldM, forM_, unless, foldM_)
 import Data.Bifunctor (bimap)
 import Data.Int (Int32)
 import Data.List (partition, find)
@@ -54,7 +54,7 @@ initialState c = do
     newTVarIO AppState
         { appNotificationQueue =
             []
-        , appRemovalQueue =
+        , appEventQueue =
             []
         , appWindowList =
             []
@@ -129,7 +129,7 @@ initializeGtk c =
 
 -- | Generate the CSS used to theme the Windows.
 appStyle :: Config -> T.Text
-appStyle c = renderCSS $
+appStyle c = renderCSS $ do
     "window" ? do
         when (font c /= "") $
             "font" .= font c
@@ -137,6 +137,14 @@ appStyle c = renderCSS $
         "border-style" .= "solid"
         "border-width" .= "1px"
         "border-color" .= borderColor c
+    "button" ? do
+        "margin-top" .= "10px"
+        "border-style" .= "solid"
+        "border-width" .= "1px"
+        "border-color" .= borderColor c
+        "padding" .= "2px 5px"
+    "button + button" ? do
+        "margin-left" .= "10px"
 
 
 -- | Either Handle a QueueRequest for a Notification by Showing or
@@ -184,7 +192,7 @@ removeExpired c sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
 showNotification :: Config -> TVar AppState -> Notification -> IO ()
 showNotification c sTV n = do
     (winX, winY) <- appNextPosition <$> readTVarIO sTV
-    win <- buildNotificationWindow c n
+    win <- buildNotificationWindow c sTV n
     void . Gtk.onWidgetButtonPressEvent win . const
         $ deleteNotification c sTV Dismissed (nID n) win
     Gtk.windowMove win winX winY
@@ -204,11 +212,11 @@ showNotification c sTV n = do
 -- | Create & fill a new `Gtk.Window` for the `Notification`.
 --
 -- The window contains a `Gtk.Grid` with `Gtk.Label`s for the title & body
--- text.
+-- text, and `Gtk.Button`s for the actions.
 --
 -- TODO: Add Icons
-buildNotificationWindow :: Config -> Notification -> IO Gtk.Window
-buildNotificationWindow c n = do
+buildNotificationWindow :: Config -> TVar AppState -> Notification -> IO Gtk.Window
+buildNotificationWindow c sTV n = do
     win <- Gtk.windowNew Gtk.WindowTypeToplevel
     Gtk.setWindowTypeHint win Gdk.WindowTypeHintNotification
     Gtk.windowSetKeepAbove win True
@@ -241,6 +249,17 @@ buildNotificationWindow c n = do
         Gtk.labelSetMarkup bodyLabel . bodyFormat c $ nBody n
         Gtk.widgetSetHalign bodyLabel Gtk.AlignStart
         Gtk.containerAdd grid bodyLabel
+
+    (\f -> foldM_ f Nothing (nActions n)) $ \mbLast a@(key, label) ->
+        if isDefaultAction a then
+            -- Skip default action for now.
+            -- TODO: trigger default on middle- or right-click of notification?
+            return mbLast
+        else do
+            button <- Gtk.buttonNewWithLabel label
+            void . Gtk.onButtonClicked button $ triggerAction sTV key $ nID n
+            Gtk.gridAttachNextTo grid button mbLast (maybe Gtk.PositionTypeBottom (const Gtk.PositionTypeRight) mbLast) 1 1
+            return $ Just button
 
     return win
 
@@ -305,12 +324,19 @@ deleteNotification c sTV reason notificationID win =  do
         , appNextPosition =
             second (\y -> y - widgetHeight - spacing c)
                 $ appNextPosition s
-        , appRemovalQueue =
-            (notificationID, reason) : appRemovalQueue s
+        , appEventQueue =
+            (notificationID, NotificationClosed reason) : appEventQueue s
         }
     moveWindowsIfNecessary c sTV
     Gtk.widgetDestroy win
     return True
+
+triggerAction :: TVar AppState -> ActionKey -> NotificationID -> IO ()
+triggerAction sTV key notificationID = do
+    atomically . modifyTVar sTV $ \s -> s
+        { appEventQueue =
+            (notificationID, ActionTriggered key) : appEventQueue s
+        }
 
 
 -- | Remove the first `Notification` in the `WindowList`.
@@ -375,12 +401,19 @@ connectAndServe c sTV = bracket connectSession disconnect $ \client -> do
             >> exitFailure
     notificationServer c sTV client
     forever $ do
-        removals <- atomically $ do
-            nis <- appRemovalQueue <$> readTVar sTV
-            modifyTVar sTV $ \s -> s { appRemovalQueue = [] }
+        events <- atomically $ do
+            nis <- appEventQueue <$> readTVar sTV
+            modifyTVar sTV $ \s -> s { appEventQueue = [] }
             return nis
-        mapM_ (uncurry $ emitClosed client) removals
+        mapM_ (handleEvents client) events
         threadDelay 1000000
+    where
+        handleEvents :: Client -> (NotificationID, AppEvent) -> IO ()
+        handleEvents client = \case
+            (notifId, NotificationClosed reason) ->
+                emitClosed client notifId reason
+            (notifId, ActionTriggered key) ->
+                emitActionInvoked client notifId key
 
 -- | Implement the `org.freedesktop.Notifications` DBus interface at a path
 -- of `/org/freedesktop/Notifications`.
@@ -407,6 +440,7 @@ getCapabilities = return
     , "body-hyperlinks"
     , "body-markup"
     , "persistence"
+    , "actions"
     ]
 
 
@@ -419,11 +453,11 @@ notify
     -> String                   -- ^ App Icon
     -> T.Text                   -- ^ Summary
     -> T.Text                   -- ^ Body
-    -> [String]                 -- ^ Actions
+    -> [T.Text]                 -- ^ Actions
     -> M.Map String Variant     -- ^ Hint
     -> Int32                    -- ^ Timeout in Milliseconds
     -> IO Word32                -- ^ Notification ID
-notify sTV _ replaceID _ summary body _ hints timeout = do
+notify sTV _ replaceID _ summary body actions hints timeout = do
     expirationTime <-
         if timeout > 0 then
             Just . addUTCTime (fromIntegral timeout / 1000) <$> getCurrentTime
@@ -449,6 +483,7 @@ notify sTV _ replaceID _ summary body _ hints timeout = do
                     { nID = notificationID
                     , nBody = body
                     , nTitle = summary
+                    , nActions = groupActions actions
                     , nUrgency = urgency
                     , nExpirationTime = expirationTime
                     }
@@ -459,6 +494,13 @@ notify sTV _ replaceID _ summary body _ hints timeout = do
                     }
         writeTVar sTV updatedState
         return $ fromNotificationID notificationID
+    where
+        groupActions :: [T.Text] -> [(ActionKey, T.Text)]
+        groupActions = \case
+            (k:val:rest) ->
+                (ActionKey k, val) : groupActions rest
+            _ ->
+                []
 
 
 -- | The CloseNotification DBus method removes the `Window` representing
@@ -479,11 +521,16 @@ getServerInformation = return
 
 
 -- Signal Emission
--- TODO: Optionally Implement ActionInvoked
 
 -- | Notify DBus Listeners that a Notification has been Closed.
 emitClosed :: Client -> NotificationID -> ReasonClosed -> IO ()
 emitClosed c (NotificationID i) r =
     emit c $ (signal "/org/freedesktop/Notifications" "org.freedesktop.Notifications" "NotificationClosed")
         { signalBody = [toVariant i, toVariant r]
+        }
+
+emitActionInvoked :: Client -> NotificationID -> ActionKey -> IO ()
+emitActionInvoked c (NotificationID i) (ActionKey k) =
+    emit c $ (signal "/org/freedesktop/Notifications" "org.freedesktop.Notifications" "ActionInvoked")
+        { signalBody = [toVariant i, toVariant k]
         }
