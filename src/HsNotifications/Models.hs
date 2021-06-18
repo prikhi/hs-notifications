@@ -30,6 +30,7 @@ data Notification
         { nTitle :: T.Text
         , nBody :: T.Text
         , nUrgency :: Urgency
+        , nResident :: Bool
         , nID :: NotificationID
         , nActions :: [(ActionKey, T.Text)]
         , nExpirationTime :: Maybe UTCTime

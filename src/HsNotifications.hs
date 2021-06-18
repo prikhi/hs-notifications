@@ -257,7 +257,10 @@ buildNotificationWindow c sTV n = do
             return mbLast
         else do
             button <- Gtk.buttonNewWithLabel label
-            void . Gtk.onButtonClicked button $ triggerAction sTV key $ nID n
+            void . Gtk.onButtonClicked button $ do
+                triggerAction sTV key (nID n)
+                unless (nResident n) . void $
+                    deleteNotification c sTV Dismissed (nID n) win
             Gtk.gridAttachNextTo grid button mbLast (maybe Gtk.PositionTypeBottom (const Gtk.PositionTypeRight) mbLast) 1 1
             return $ Just button
 
@@ -478,6 +481,8 @@ notify sTV _ replaceID _ summary body actions hints timeout = do
                     )
             urgency =
                 fromMaybe Normal $ fromVariant =<< M.lookup "urgency" hints
+            resident =
+                fromMaybe False $ fromVariant =<< M.lookup "resident" hints
             notification =
                 Notification
                     { nID = notificationID
@@ -485,6 +490,7 @@ notify sTV _ replaceID _ summary body actions hints timeout = do
                     , nTitle = summary
                     , nActions = groupActions actions
                     , nUrgency = urgency
+                    , nResident = resident
                     , nExpirationTime = expirationTime
                     }
             updatedState =
