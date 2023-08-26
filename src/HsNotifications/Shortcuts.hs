@@ -2,7 +2,7 @@ module HsNotifications.Shortcuts where
 
 import Control.Concurrent (ThreadId, forkIO)
 import Control.Exception (bracket)
-import Control.Monad (forever, when, void)
+import Control.Monad (forever, void, when)
 import Data.Bits ((.|.))
 import Data.List (subsequences)
 
@@ -19,28 +19,36 @@ withShortcutThread keySym modMask action =
         keyCode <- Xlib.keysymToKeycode display keySym
         Xlib.selectInput display Xlib.keyPressMask rootWindow
         void . Xlib.allocaXEvent $ \ev ->
-            grabKeyWithIgnoreMasks display keyCode modMask
-                rootWindow False Xlib.grabModeAsync Xlib.grabModeAsync
-            $ \_ -> forever $ do
-                Xlib.nextEvent display ev
-                evType <- Xlib.get_EventType ev
-                when (evType == Xlib.keyPress) action
+            grabKeyWithIgnoreMasks
+                display
+                keyCode
+                modMask
+                rootWindow
+                False
+                Xlib.grabModeAsync
+                Xlib.grabModeAsync
+                $ \_ -> forever $ do
+                    Xlib.nextEvent display ev
+                    evType <- Xlib.get_EventType ev
+                    when (evType == Xlib.keyPress) action
 
 
 -- | Grab a Specific Key Input, Run an Action & Then Ungrab the Input.
-withGrabKey :: Xlib.Display
-            -> Xlib.KeyCode
-            -> Xlib.KeyMask
-            -> Xlib.Window
-            -> Bool
-            -> Xlib.GrabMode
-            -> Xlib.GrabMode
-            -> (() -> IO ())
-            -> IO ()
+withGrabKey
+    :: Xlib.Display
+    -> Xlib.KeyCode
+    -> Xlib.KeyMask
+    -> Xlib.Window
+    -> Bool
+    -> Xlib.GrabMode
+    -> Xlib.GrabMode
+    -> (() -> IO ())
+    -> IO ()
 withGrabKey d k m w o p kb =
     bracket
         (Xlib.grabKey d k m w o p kb)
         (const $ Xlib.ungrabKey d k m w)
+
 
 -- | Compose Multiple withGrabKey Calls Which Grab a Key for the Specified
 -- KeyMask and Any Combination of CapsLock, NumLock, & ScrollLock.
@@ -77,10 +85,10 @@ grabKeyWithIgnoreMasks d k m w o p kb action =
             const $ withGrabKey d k m w o p kb action
         withIgnoredKeyMasks =
             foldl ignoredGrab baseKeyFunction ignoredModifierMasks
-    in
+     in
         withIgnoredKeyMasks ()
-    where
-        -- Wrap the action in GrabKey call, adding the given `KeyMask`.
-        ignoredGrab :: (() -> IO ()) -> Xlib.KeyMask -> (() -> IO ())
-        ignoredGrab f ignoredModifierMask _ =
-            withGrabKey d k (m .|. ignoredModifierMask) w o p kb f
+  where
+    -- Wrap the action in GrabKey call, adding the given `KeyMask`.
+    ignoredGrab :: (() -> IO ()) -> Xlib.KeyMask -> (() -> IO ())
+    ignoredGrab f ignoredModifierMask _ =
+        withGrabKey d k (m .|. ignoredModifierMask) w o p kb f

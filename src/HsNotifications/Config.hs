@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+
 module HsNotifications.Config where
 
 import Data.Bits ((.|.))
-import Data.Default (Default(def))
+import Data.Default (Default (def))
 import Data.Int (Int32)
 
-import HsNotifications.Models (Notification(nTitle, nUrgency), Urgency(..))
+import HsNotifications.Models (Notification (nTitle, nUrgency), Urgency (..))
 
 import qualified Data.Text as T
 import qualified Graphics.X11.Xlib as Xlib
@@ -17,26 +18,26 @@ import qualified Graphics.X11.Xlib as Xlib
 -- TODO: Per App & Urgency Title/Body/Border Colors
 -- TODO: App Urgency Overrides
 -- TODO: Make customizable format strings matching on app name, urgency
-data Config
-    = Config
-        { closeKey :: Xlib.KeySym
-        , closeSingleMask :: Xlib.KeyMask
-        , closeAllMask :: Xlib.KeyMask
-        , placementX :: Int32
-        , placementY :: Int32
-        , spacing :: Int32
-        , paddingX :: Int32
-        , paddingY :: Int32
-        , font :: T.Text
-        , titleNormalColor :: T.Text
-        , titleCriticalColor :: T.Text
-        , titleLowColor :: T.Text
-        , bodyColor :: T.Text
-        , borderColor :: T.Text
-        , backgroundColor :: T.Text
-        , titleFormat :: Notification -> T.Text
-        , bodyFormat :: T.Text -> T.Text
-        }
+data Config = Config
+    { closeKey :: Xlib.KeySym
+    , closeSingleMask :: Xlib.KeyMask
+    , closeAllMask :: Xlib.KeyMask
+    , placementX :: Int32
+    , placementY :: Int32
+    , spacing :: Int32
+    , paddingX :: Int32
+    , paddingY :: Int32
+    , font :: T.Text
+    , titleNormalColor :: T.Text
+    , titleCriticalColor :: T.Text
+    , titleLowColor :: T.Text
+    , bodyColor :: T.Text
+    , borderColor :: T.Text
+    , backgroundColor :: T.Text
+    , titleFormat :: Notification -> T.Text
+    , bodyFormat :: T.Text -> T.Text
+    }
+
 
 -- | The Default Config Uses Ctrl-Mod4-w to close a notification
 -- & Ctrl-Shift-Mod4-w to close all notifications.
@@ -86,7 +87,7 @@ instance Default Config where
                                 titleNormalColor def
                             Critical ->
                                 titleCriticalColor def
-                in
+                 in
                     "<span font-weight='bold' color='" <> titleColor <> "'>" <> nTitle n <> "</span>"
             , bodyFormat = \b ->
                 "<span color='" <> bodyColor def <> "'>" <> b <> "</span>"
