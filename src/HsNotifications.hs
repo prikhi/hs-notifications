@@ -32,6 +32,7 @@ import HsNotifications.Models
 import HsNotifications.Shortcuts (withShortcutThread)
 import Paths_hs_notifications (version)
 
+import qualified Data.List as L
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified GI.GLib as GLib
@@ -565,8 +566,12 @@ notify sTV defTimeout _ replaceID _ summary body actions hints timeout = do
 
     atomically $ do
         state <- readTVar sTV
-        let (notificationID, nextNotificationID, queueRequest) =
-                if replaceID == 0
+        let noReplacementExists =
+                isNothing
+                    . L.find ((== NotificationID replaceID) . nID . fst)
+                    $ appWindowList state
+            (notificationID, nextNotificationID, queueRequest) =
+                if replaceID == 0 || noReplacementExists
                     then
                         ( appNextNotificationID state
                         , nextID $ appNextNotificationID state
