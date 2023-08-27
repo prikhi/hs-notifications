@@ -115,6 +115,14 @@ runGtk c sTV = do
         withShortcutThread (closeKey c) (closeAllMask c)
             $ killAllNotifications c sTV
 
+    -- Monitor Watcher
+    mbScreen <- Gdk.screenGetDefault
+    forM_ mbScreen $ \screen ->
+        Gdk.afterScreenMonitorsChanged screen $ do
+            rootPosition <- bimap (+ placementX c) (+ placementY c) <$> getMonitorGeometryOrExit
+            atomically $ modifyTVar sTV $ \s -> s {appRootPosition = rootPosition}
+            moveWindowsIfNecessary c sTV
+
     -- New / Expired Checkers
     void
         . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100
