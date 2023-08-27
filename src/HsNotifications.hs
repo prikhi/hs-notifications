@@ -289,11 +289,7 @@ buildNotificationWindow c sTV n = do
                 return mbLast
             else do
                 button <- Gtk.buttonNewWithLabel label
-                void . Gtk.onButtonClicked button $ do
-                    triggerAction sTV key (nID n)
-                    unless (nResident n)
-                        . void
-                        $ deleteNotification c sTV Dismissed (nID n) win
+                void . Gtk.onButtonClicked button $ triggerAction sTV key (nID n)
                 Gtk.gridAttachNextTo grid button mbLast (maybe Gtk.PositionTypeBottom (const Gtk.PositionTypeRight) mbLast) 1 1
                 return $ Just button
 
