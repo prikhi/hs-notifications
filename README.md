@@ -48,7 +48,6 @@ features or customizability, feel free to open an issue.
   text. Specify overrides in config file sections.
 * Add action support?
 * Handle monitor change signals - reset notification positions
-* Add `image-data` support(gives us album art for song change notifications)
 * Refactor to `ReaderT Env IO`
 
     * Add `data Env = Env Config AppState`

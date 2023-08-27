@@ -1,10 +1,12 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module HsNotifications.Models where
 
 import Control.Monad ((>=>))
 import DBus (IsVariant (..), Variant)
+import Data.ByteString (ByteString)
 import Data.Int (Int32)
 import Data.Time.Clock (UTCTime)
 import Data.Word (Word32, Word8)
@@ -39,6 +41,7 @@ data Notification = Notification
     , nID :: NotificationID
     , nActions :: [(ActionKey, T.Text)]
     , nExpirationTime :: Maybe UTCTime
+    , nImageData :: Maybe ImageData
     }
 
 
@@ -142,6 +145,42 @@ instance IsVariant ReasonClosed where
             3 -> Just DBusCall
             4 -> Just Other
             _ -> Nothing
+
+
+data ImageData = ImageData
+    { idWidth :: Int32
+    , idHeight :: Int32
+    , idRowStride :: Int32
+    , idHasAlpha :: Bool
+    , idBitsPerSample :: Int32
+    , idChannels :: Int32
+    , idData :: ByteString
+    }
+
+
+instance IsVariant ImageData where
+    toVariant ImageData {..} =
+        toVariant
+            ( idWidth
+            , idHeight
+            , idRowStride
+            , idHasAlpha
+            , 8 :: Int32
+            , if idHasAlpha then (4 :: Int32) else 3
+            , idData
+            )
+    fromVariant =
+        fmap
+            ( \( idWidth
+                , idHeight
+                , idRowStride
+                , idHasAlpha
+                , idBitsPerSample
+                , idChannels
+                , idData
+                ) -> ImageData {..}
+            )
+            . fromVariant
 
 
 type ActionQueue =

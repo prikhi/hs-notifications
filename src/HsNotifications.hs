@@ -1,20 +1,22 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module HsNotifications where
 
 import Control.Applicative ((<|>))
-import Control.Arrow (first, second)
+import Control.Arrow (first, second, (&&&))
 import Control.Concurrent (forkIO, killThread, threadDelay)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Exception (bracket)
-import Control.Monad (foldM, foldM_, forever, join, unless, void, when, (<=<))
+import Control.Monad (foldM, foldM_, forM_, forever, join, unless, void, when, (<=<))
 import Data.Bifunctor (bimap)
+import Data.Fixed (Micro)
 import Data.Int (Int32)
 import Data.List (find, partition)
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Maybe (fromMaybe, isNothing, listToMaybe)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time.Clock (addUTCTime, getCurrentTime)
 import Data.Version (showVersion)
@@ -34,6 +36,7 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified GI.GLib as GLib
 import qualified GI.Gdk as Gdk
+import qualified GI.GdkPixbuf as Gdk
 import qualified GI.Gtk as Gtk
 
 
@@ -237,8 +240,8 @@ buildNotificationWindow c sTV n = do
 
     -- Add Grid
     grid <- Gtk.gridNew
+    Gtk.gridSetRowHomogeneous grid False
     Gtk.containerAdd win grid
-    Gtk.orientableSetOrientation grid Gtk.OrientationVertical
 
     -- Set Padding
     mapM_
@@ -252,18 +255,31 @@ buildNotificationWindow c sTV n = do
         , Gtk.widgetSetMarginEnd
         ]
 
+    -- Add Image
+    forM_ (nImageData n) $ \imageData -> do
+        image <- makeScaledPixbuf imageData >>= Gtk.imageNewFromPixbuf . Just
+        Gtk.gridAttach grid image 0 0 1 2
+        Gtk.gridSetColumnSpacing grid (fromIntegral $ paddingX c `div` 2)
+        Gtk.gridSetRowSpacing grid 0
+
     -- Add Labels
+    let titleBodyCol = if isNothing (nImageData n) then 0 else 1
+
     when (nTitle n /= "") $ do
         titleLabel <- Gtk.labelNew Nothing
         Gtk.labelSetMarkup titleLabel $ titleFormat c n
         Gtk.widgetSetHalign titleLabel Gtk.AlignStart
-        Gtk.containerAdd grid titleLabel
+        Gtk.widgetSetVexpand titleLabel False
+        Gtk.gridAttach grid titleLabel titleBodyCol 0 1 1
 
     when (nBody n /= "") $ do
         bodyLabel <- Gtk.labelNew Nothing
         Gtk.labelSetMarkup bodyLabel . bodyFormat c $ nBody n
         Gtk.widgetSetHalign bodyLabel Gtk.AlignStart
-        Gtk.containerAdd grid bodyLabel
+        Gtk.widgetSetValign bodyLabel Gtk.AlignStart
+        Gtk.widgetSetVexpand bodyLabel True
+        let bodyRow = if T.null (nTitle n) then 0 else 1
+        Gtk.gridAttach grid bodyLabel titleBodyCol bodyRow 1 1
 
     (\f -> foldM_ f Nothing (nActions n)) $ \mbLast a@(key, label) ->
         if isDefaultAction a
@@ -281,6 +297,39 @@ buildNotificationWindow c sTV n = do
                 return $ Just button
 
     return win
+  where
+    -- Create a pixel buffer for the given image data, optionally scaling
+    -- it down if the height or width exceed the maximums in the Config.
+    makeScaledPixbuf :: ImageData -> IO Gdk.Pixbuf
+    makeScaledPixbuf ImageData {..} = do
+        let (maxWidth, maxHeight) = bimap fromIntegral fromIntegral $ (imageMaxWidth &&& imageMaxHeight) c
+            scaleFactor =
+                if maxWidth >= fromIntegral idWidth && maxHeight >= fromIntegral idHeight
+                    then (1.0 :: Micro)
+                    else min (maxWidth / fromIntegral idWidth) (maxHeight / fromIntegral idHeight)
+            scale x = round $ scaleFactor * fromIntegral x
+            (finalWidth, finalHeight) = bimap scale scale (idWidth, idHeight)
+        imageBytes <- GLib.bytesNew $ Just idData
+        -- TODO: this is deprecated in gtk4, need to do pixbuf -> gdk_texture
+        -- -> gtk_picture when gi-gtk-4+ is released to stackage
+        imageRawPixbuf <-
+            Gdk.pixbufNewFromBytes
+                imageBytes
+                Gdk.ColorspaceRgb
+                idHasAlpha
+                idBitsPerSample
+                idWidth
+                idHeight
+                idRowStride
+        if scaleFactor /= 1.0
+            then
+                fromMaybe imageRawPixbuf
+                    <$> Gdk.pixbufScaleSimple
+                        imageRawPixbuf
+                        finalWidth
+                        finalHeight
+                        Gdk.InterpTypeBilinear
+            else return imageRawPixbuf
 
 
 -- | Replace & Re-Render a Notification.
@@ -532,6 +581,7 @@ notify sTV defTimeout _ replaceID _ summary body actions hints timeout = do
                 fromMaybe Normal $ fromVariant =<< M.lookup "urgency" hints
             resident =
                 fromMaybe False $ fromVariant =<< M.lookup "resident" hints
+            imageData = fromVariant =<< M.lookup "image-data" hints
             notification =
                 Notification
                     { nID = notificationID
@@ -541,6 +591,7 @@ notify sTV defTimeout _ replaceID _ summary body actions hints timeout = do
                     , nUrgency = urgency
                     , nResident = resident
                     , nExpirationTime = expirationTime
+                    , nImageData = imageData
                     }
             updatedState =
                 state

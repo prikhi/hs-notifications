@@ -28,6 +28,8 @@ data Config = Config
     , spacing :: Int32
     , paddingX :: Int32
     , paddingY :: Int32
+    , imageMaxWidth :: Int32
+    , imageMaxHeight :: Int32
     , font :: T.Text
     , titleNormalColor :: T.Text
     , titleCriticalColor :: T.Text
@@ -66,6 +68,10 @@ instance Default Config where
                 20
             , paddingY =
                 10
+            , imageMaxWidth =
+                75
+            , imageMaxHeight =
+                75
             , font =
                 ""
             , titleNormalColor =

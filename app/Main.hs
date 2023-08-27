@@ -86,6 +86,8 @@ configParser = section "global" $ do
     mSpacing <- fieldMbOf "spacing" number
     mPaddingX <- fieldMbOf "horizontal-padding" number
     mPaddingY <- fieldMbOf "vertical-padding" number
+    mImageMaxWidth <- fieldMbOf "image-max-width" number
+    mImageMaxHeight <- fieldMbOf "image-max-height" number
     mFont <- fieldMbOf "font" string
     mBody <- fmap parseColor <$> fieldMbOf "body-color" string
     mBorder <- fmap parseColor <$> fieldMbOf "border-color" string
@@ -104,6 +106,8 @@ configParser = section "global" $ do
             , spacing = withDefault spacing mSpacing
             , paddingX = withDefault paddingX mPaddingX
             , paddingY = withDefault paddingY mPaddingY
+            , imageMaxWidth = withDefault imageMaxWidth mImageMaxWidth
+            , imageMaxHeight = withDefault imageMaxHeight mImageMaxHeight
             , font = withDefault font mFont
             , bodyColor = withDefault bodyColor mBody
             , borderColor = withDefault borderColor mBorder

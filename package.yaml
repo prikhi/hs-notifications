@@ -29,8 +29,10 @@ library:
   source-dirs: src
   dependencies:
   - containers
+  - bytestring
   - dbus
   - gi-gdk
+  - gi-gdkpixbuf
   - gi-glib
   - gi-gtk
   - stitch
