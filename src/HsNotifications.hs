@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -104,21 +105,22 @@ runGtk c sTV = do
 
     -- Keybind Watchers
     closeOneShortcutThread <-
-        withShortcutThread (closeKey c) (closeSingleMask c) $
-            killFirstNotification c sTV
+        withShortcutThread (closeKey c) (closeSingleMask c)
+            $ killFirstNotification c sTV
     closeAllShortcutThread <-
-        withShortcutThread (closeKey c) (closeAllMask c) $
-            killAllNotifications c sTV
+        withShortcutThread (closeKey c) (closeAllMask c)
+            $ killAllNotifications c sTV
 
     -- New / Expired Checkers
-    void . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100 $
-        processNotificationQueue c sTV
-            >> removeExpired c sTV
-            >> return True
+    void
+        . GLib.timeoutAdd GLib.PRIORITY_DEFAULT 100
+        $ processNotificationQueue c sTV
+        >> removeExpired c sTV
+        >> return True
 
     -- Run the loop
-    bracket (return [closeOneShortcutThread, closeAllShortcutThread]) (mapM killThread) $
-        const Gtk.main
+    bracket (return [closeOneShortcutThread, closeAllShortcutThread]) (mapM killThread)
+        $ const Gtk.main
 
 
 -- | Initialize GTK & Attach the Generated CSS to the Default `Gdk.Screen`.
@@ -137,8 +139,9 @@ initializeGtk c =
 appStyle :: Config -> T.Text
 appStyle c = renderCSS $ do
     "window" ? do
-        when (font c /= "") $
-            "font" .= font c
+        when (font c /= "")
+            $ "font"
+            .= font c
         "background-color" .= backgroundColor c
         "border-style" .= "solid"
         "border-width" .= "1px"
@@ -200,8 +203,10 @@ showNotification :: Config -> TVar AppState -> Notification -> IO ()
 showNotification c sTV n = do
     (winX, winY) <- appNextPosition <$> readTVarIO sTV
     win <- buildNotificationWindow c sTV n
-    void . Gtk.onWidgetButtonPressEvent win . const $
-        deleteNotification c sTV Dismissed (nID n) win
+    void
+        . Gtk.onWidgetButtonPressEvent win
+        . const
+        $ deleteNotification c sTV Dismissed (nID n) win
     Gtk.windowMove win winX winY
     Gtk.widgetShowAll win
 
@@ -269,8 +274,9 @@ buildNotificationWindow c sTV n = do
                 button <- Gtk.buttonNewWithLabel label
                 void . Gtk.onButtonClicked button $ do
                     triggerAction sTV key (nID n)
-                    unless (nResident n) . void $
-                        deleteNotification c sTV Dismissed (nID n) win
+                    unless (nResident n)
+                        . void
+                        $ deleteNotification c sTV Dismissed (nID n) win
                 Gtk.gridAttachNextTo grid button mbLast (maybe Gtk.PositionTypeBottom (const Gtk.PositionTypeRight) mbLast) 1 1
                 return $ Just button
 
@@ -336,8 +342,8 @@ deleteNotification c sTV reason notificationID win = do
             { appWindowList =
                 filter ((/= notificationID) . nID . fst) $ appWindowList s
             , appNextPosition =
-                second (\y -> y - widgetHeight - spacing c) $
-                    appNextPosition s
+                second (\y -> y - widgetHeight - spacing c)
+                    $ appNextPosition s
             , appEventQueue =
                 (notificationID, NotificationClosed reason) : appEventQueue s
             }
@@ -360,8 +366,9 @@ triggerAction sTV key notificationID = do
 -- Thread-safe.
 killFirstNotification :: Config -> TVar AppState -> IO ()
 killFirstNotification c sTV =
-    void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
-        listToMaybe . appWindowList <$> readTVarIO sTV >>= \case
+    void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
+        mbFirstWin <- listToMaybe . appWindowList <$> readTVarIO sTV
+        case mbFirstWin of
             Just (n, win) ->
                 deleteNotification c sTV Dismissed (nID n) win >> return False
             Nothing ->
@@ -373,10 +380,12 @@ killFirstNotification c sTV =
 --  Thread-safe.
 killAllNotifications :: Config -> TVar AppState -> IO ()
 killAllNotifications c sTV =
-    void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
-        appWindowList <$> readTVarIO sTV
-            >>= mapM_ (uncurry (deleteNotification c sTV Dismissed) . first nID)
-            >> return False
+    void
+        . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT
+        $ readTVarIO sTV
+        >>= mapM_ (uncurry (deleteNotification c sTV Dismissed) . first nID)
+        . appWindowList
+        >> return False
 
 
 -- | Remove the `Notification` with the given `NotificationID`.
@@ -384,9 +393,9 @@ killAllNotifications c sTV =
 -- Thread-safe.
 killNotificationByID :: Config -> TVar AppState -> ReasonClosed -> NotificationID -> IO ()
 killNotificationByID c sTV reason notifID =
-    void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $
-        maybe (return False) (\(_, w) -> deleteNotification c sTV reason notifID w >> return False)
-            =<< find ((== notifID) . nID . fst) . appWindowList <$> readTVarIO sTV
+    void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
+        mbWin <- find ((== notifID) . nID . fst) . appWindowList <$> readTVarIO sTV
+        maybe (return False) (\(_, w) -> deleteNotification c sTV reason notifID w >> return False) mbWin
 
 
 -- | Calculate the Actual & Expected Position of the Notifications & Move
@@ -395,8 +404,8 @@ moveWindowsIfNecessary :: Config -> TVar AppState -> IO ()
 moveWindowsIfNecessary c sTV = do
     state <- readTVarIO sTV
     (_, windowsAndPositions) <-
-        foldM nextPosition (appRootPosition state, []) $
-            appWindowList state
+        foldM nextPosition (appRootPosition state, [])
+            $ appWindowList state
     mapM_ move windowsAndPositions
   where
     nextPosition ((x, y), processed) (_, win) = do
@@ -416,9 +425,9 @@ moveWindowsIfNecessary c sTV = do
 connectAndServe :: Config -> TVar AppState -> IO ()
 connectAndServe c sTV = bracket connectSession disconnect $ \client -> do
     requestResult <- requestName client "org.freedesktop.Notifications" []
-    when (requestResult /= NamePrimaryOwner) $
-        putStrLn "Another notification server is already started"
-            >> exitFailure
+    when (requestResult /= NamePrimaryOwner)
+        $ putStrLn "Another notification server is already started"
+        >> exitFailure
     notificationServer c sTV client
     forever $ do
         events <- atomically $ do
@@ -447,7 +456,7 @@ notificationServer c sTV client =
             { interfaceName = "org.freedesktop.Notifications"
             , interfaceMethods =
                 [ autoMethod "GetCapabilities" getCapabilities
-                , autoMethod "Notify" (notify sTV)
+                , autoMethod "Notify" (notify sTV $ defaultTimeout c)
                 , autoMethod "CloseNotification" (closeNotification c sTV)
                 , autoMethod "GetServerInformation" getServerInformation
                 ]
@@ -473,6 +482,8 @@ getCapabilities =
 notify
     :: TVar AppState
     -- ^ App State
+    -> Int32
+    -- ^ Default Timeout
     -> String
     -- ^ App Name
     -> Word32
@@ -491,11 +502,18 @@ notify
     -- ^ Timeout in Milliseconds
     -> IO Word32
     -- ^ Notification ID
-notify sTV _ replaceID _ summary body actions hints timeout = do
+notify sTV defTimeout _ replaceID _ summary body actions hints timeout = do
     expirationTime <-
-        if timeout > 0
-            then Just . addUTCTime (fromIntegral timeout / 1000) <$> getCurrentTime
-            else return Nothing
+        if
+            | timeout > 0 ->
+                Just . addUTCTime (fromIntegral timeout / 1000) <$> getCurrentTime
+            | timeout == 0 ->
+                return Nothing
+            | defTimeout <= 0 ->
+                return Nothing
+            | otherwise ->
+                Just . addUTCTime (fromIntegral defTimeout) <$> getCurrentTime
+
     atomically $ do
         state <- readTVar sTV
         let (notificationID, nextNotificationID, queueRequest) =
@@ -563,15 +581,15 @@ getServerInformation =
 -- | Notify DBus Listeners that a Notification has been Closed.
 emitClosed :: Client -> NotificationID -> ReasonClosed -> IO ()
 emitClosed c (NotificationID i) r =
-    emit c $
-        (signal "/org/freedesktop/Notifications" "org.freedesktop.Notifications" "NotificationClosed")
+    emit c
+        $ (signal "/org/freedesktop/Notifications" "org.freedesktop.Notifications" "NotificationClosed")
             { signalBody = [toVariant i, toVariant r]
             }
 
 
 emitActionInvoked :: Client -> NotificationID -> ActionKey -> IO ()
 emitActionInvoked c (NotificationID i) (ActionKey k) =
-    emit c $
-        (signal "/org/freedesktop/Notifications" "org.freedesktop.Notifications" "ActionInvoked")
+    emit c
+        $ (signal "/org/freedesktop/Notifications" "org.freedesktop.Notifications" "ActionInvoked")
             { signalBody = [toVariant i, toVariant k]
             }

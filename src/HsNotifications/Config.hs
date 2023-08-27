@@ -22,6 +22,7 @@ data Config = Config
     { closeKey :: Xlib.KeySym
     , closeSingleMask :: Xlib.KeyMask
     , closeAllMask :: Xlib.KeyMask
+    , defaultTimeout :: Int32
     , placementX :: Int32
     , placementY :: Int32
     , spacing :: Int32
@@ -53,6 +54,8 @@ instance Default Config where
                 Xlib.mod4Mask .|. Xlib.controlMask
             , closeAllMask =
                 Xlib.mod4Mask .|. Xlib.controlMask .|. Xlib.shiftMask
+            , defaultTimeout =
+                5
             , placementX =
                 12
             , placementY =

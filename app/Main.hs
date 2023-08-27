@@ -80,6 +80,7 @@ configParser = section "global" $ do
     mAllMask <-
         fmap (buildModMask Xlib.noModMask)
             <$> fieldMbOf "close-all-mask" (listWithSeparator "-" string)
+    mbDefTimeout <- fieldMbOf "default-timeout" number
     mPlacementX <- fieldMbOf "x-position" number
     mPlacementY <- fieldMbOf "y-position" number
     mSpacing <- fieldMbOf "spacing" number
@@ -97,6 +98,7 @@ configParser = section "global" $ do
             { closeKey = withDefault closeKey mCloseKey
             , closeSingleMask = withDefault closeSingleMask mSingleMask
             , closeAllMask = withDefault closeAllMask mAllMask
+            , defaultTimeout = withDefault defaultTimeout mbDefTimeout
             , placementX = withDefault placementX mPlacementX
             , placementY = withDefault placementY mPlacementY
             , spacing = withDefault spacing mSpacing
