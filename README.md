@@ -1,5 +1,8 @@
 # hs-notifications
 
+[![hs-notifications Build Status](https://github.com/prikhi/hs-notifications/actions/workflows/main.yml/badge.svg)](https://github.com/prikhi/hs-notifications/actions/workflows/main.yml)
+
+
 A Super Simple Desktop Notification Server in Haskell.
 
 ![A Screenshot Showing the Notification Windows Created by hs-notifications](https://raw.githubusercontent.com/prikhi/hs-notifications/master/screenshot.png  "hs-notifications Screenshot")
@@ -47,7 +50,7 @@ features or customizability, feel free to open an issue.
 * Add ability to override colors & icon - matching by app name or title/body
   text. Specify overrides in config file sections.
 * Add action support?
-* `objectUnref` the pixbufs we make after creating the GtkImage.
+* `objectUnref` the pixbufs we make after creating the GtkImage?
 * Notification Spec says to never auto-expire Critical urgency notifications.
 * Refactor to `ReaderT Env IO`
 
