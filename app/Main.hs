@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Main where
 
 import Data.Bits ((.|.))
@@ -15,9 +13,9 @@ import System.Exit (exitFailure, exitSuccess)
 import HsNotifications (run)
 import HsNotifications.Config (Config (..))
 
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import qualified Graphics.X11.Xlib as Xlib
+import Data.Text qualified as T
+import Data.Text.IO qualified as T
+import Graphics.X11.Xlib qualified as Xlib
 
 
 -- | Attempt to load a configuration file & run the application.

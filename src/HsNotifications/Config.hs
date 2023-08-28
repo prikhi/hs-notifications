@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module HsNotifications.Config where
 
 import Data.Bits ((.|.))
@@ -8,8 +6,8 @@ import Data.Int (Int32)
 
 import HsNotifications.Models (Notification (nTitle, nUrgency), Urgency (..))
 
-import qualified Data.Text as T
-import qualified Graphics.X11.Xlib as Xlib
+import Data.Text qualified as T
+import Graphics.X11.Xlib qualified as Xlib
 
 
 -- | The Config type holds the values used to place & style the

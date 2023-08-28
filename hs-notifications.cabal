@@ -1,0 +1,135 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 888f55eab43dfc66465f421e0aa506d12a15d8fe267e7ff2325a9f8e0a7b6e24
+
+name:           hs-notifications
+version:        0.1.0.0
+synopsis:       Simple GTK DBus Desktop Notification Server
+description:    @hs-notifications@ is a DBus server that implements the Desktop Notifications
+                Specification. It listens for desktop notifications sent by DBus clients &
+                renders them on your primary monitor using the GTK UI toolkit. It features a
+                minimal but customizable GUI, with global keyboard shortcuts for dismissing
+                notifications. It can even render images sent in the notifications, like
+                album art.
+                .
+                You can install @hs-notifications@ with Stack: @stack install --resolver
+                nightly hs-notifications@. You should have your desktop environment or window
+                manager autostart @hs-notifications@ when logging in. An easy way to do this is
+                to add something like this to you @~/.xinitrc@:
+                .
+                @
+                 export $(dbus-launch)
+                 hs-notifications &
+                @
+                .
+                You can test out notifications with @notify-send@:
+                .
+                @
+                 notify-send -t 5000 "Test Notification" "That Lasts for 5 Seconds"
+                @
+                .
+                See the fully-documented example configuration in the project repository for
+                customization details.
+category:       Desktop, System
+homepage:       https://github.com/prikhi/hs-notifications#readme
+bug-reports:    https://github.com/prikhi/hs-notifications/issues
+author:         Pavan Rikhi
+maintainer:     pavan.rikhi@gmail.com
+copyright:      Pavan Rikhi, GPL-3.0
+license:        GPL-3.0
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/prikhi/hs-notifications
+
+library
+  exposed-modules:
+      HsNotifications
+      HsNotifications.Config
+      HsNotifications.Models
+      HsNotifications.Shortcuts
+  other-modules:
+      Paths_hs_notifications
+  hs-source-dirs:
+      src
+  default-extensions:
+      DerivingStrategies
+      LambdaCase
+      MultiWayIf
+      OverloadedStrings
+      RecordWildCards
+      ViewPatterns
+  ghc-options: -Wall -Wcompat -Wimplicit-lift -Wincomplete-patterns -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-exported-signatures -Wmissing-methods -Wmissing-signatures -Wname-shadowing -Wredundant-bang-patterns -Wredundant-constraints -Wunused-packages
+  build-depends:
+      X11
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , data-default
+    , dbus
+    , gi-gdk
+    , gi-gdkpixbuf
+    , gi-glib
+    , gi-gtk
+    , stitch
+    , stm
+    , text
+    , time
+  default-language: GHC2021
+
+executable hs-notifications
+  main-is: Main.hs
+  other-modules:
+      Paths_hs_notifications
+  hs-source-dirs:
+      app
+  default-extensions:
+      DerivingStrategies
+      LambdaCase
+      MultiWayIf
+      OverloadedStrings
+      RecordWildCards
+      ViewPatterns
+  ghc-options: -Wall -Wcompat -Wimplicit-lift -Wincomplete-patterns -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-exported-signatures -Wmissing-methods -Wmissing-signatures -Wname-shadowing -Wredundant-bang-patterns -Wredundant-constraints -Wunused-packages -threaded -rtsopts -with-rtsopts=-N -O2
+  build-depends:
+      X11
+    , base >=4.7 && <5
+    , config-ini
+    , data-default
+    , directory
+    , hs-notifications
+    , text
+    , xdg-basedir
+  default-language: GHC2021
+
+test-suite hs-notifications-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_hs_notifications
+  hs-source-dirs:
+      test
+  default-extensions:
+      DerivingStrategies
+      LambdaCase
+      MultiWayIf
+      OverloadedStrings
+      RecordWildCards
+      ViewPatterns
+  ghc-options: -Wall -Wcompat -Wimplicit-lift -Wincomplete-patterns -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-exported-signatures -Wmissing-methods -Wmissing-signatures -Wname-shadowing -Wredundant-bang-patterns -Wredundant-constraints -Wunused-packages -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      X11
+    , base >=4.7 && <5
+    , data-default
+    , hs-notifications
+    , text
+  default-language: GHC2021

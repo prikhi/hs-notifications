@@ -1,7 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-
 module HsNotifications.Models where
 
 import Control.Monad ((>=>))
@@ -11,8 +7,8 @@ import Data.Int (Int32)
 import Data.Time.Clock (UTCTime)
 import Data.Word (Word32, Word8)
 
-import qualified Data.Text as T
-import qualified GI.Gtk as Gtk
+import Data.Text qualified as T
+import GI.Gtk qualified as Gtk
 
 
 -- | The State passed through the application.

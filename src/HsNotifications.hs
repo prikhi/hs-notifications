@@ -1,9 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module HsNotifications where
 
 import Control.Applicative ((<|>))
@@ -32,13 +26,13 @@ import HsNotifications.Models
 import HsNotifications.Shortcuts (withShortcutThread)
 import Paths_hs_notifications (version)
 
-import qualified Data.List as L
-import qualified Data.Map as M
-import qualified Data.Text as T
-import qualified GI.GLib as GLib
-import qualified GI.Gdk as Gdk
-import qualified GI.GdkPixbuf as Gdk
-import qualified GI.Gtk as Gtk
+import Data.List qualified as L
+import Data.Map qualified as M
+import Data.Text qualified as T
+import GI.GLib qualified as GLib
+import GI.Gdk qualified as Gdk
+import GI.GdkPixbuf qualified as Gdk
+import GI.Gtk qualified as Gtk
 
 
 -- | Initialize the `AppState`, fork the DBus client & run the GTK app.
@@ -216,8 +210,8 @@ showNotification c sTV n = do
     (winX, winY) <- appNextPosition <$> readTVarIO sTV
     win <- buildNotificationWindow c sTV n
     void
-        . Gtk.onWidgetButtonPressEvent win
-        . const
+        $ Gtk.onWidgetButtonPressEvent win
+        $ const
         $ deleteNotification c sTV Dismissed (nID n) win
     Gtk.windowMove win winX winY
     Gtk.widgetShowAll win
@@ -297,7 +291,7 @@ buildNotificationWindow c sTV n = do
                 return mbLast
             else do
                 button <- Gtk.buttonNewWithLabel label
-                void . Gtk.onButtonClicked button $ triggerAction sTV key (nID n)
+                void $ Gtk.onButtonClicked button $ triggerAction sTV key (nID n)
                 Gtk.gridAttachNextTo grid button mbLast (maybe Gtk.PositionTypeBottom (const Gtk.PositionTypeRight) mbLast) 1 1
                 return $ Just button
 

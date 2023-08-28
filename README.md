@@ -47,6 +47,8 @@ features or customizability, feel free to open an issue.
 * Add ability to override colors & icon - matching by app name or title/body
   text. Specify overrides in config file sections.
 * Add action support?
+* `objectUnref` the pixbufs we make after creating the GtkImage.
+* Notification Spec says to never auto-expire Critical urgency notifications.
 * Refactor to `ReaderT Env IO`
 
     * Add `data Env = Env Config AppState`
@@ -72,7 +74,7 @@ The DBus client connects to the current dbus session, identifies itself as the
 notification server, and sets up it's event handlers.
 
 The GTK app initializes itself, gets the notification placement position,
-attaches some CSS sytles, and sets up some keybindings & timers.
+attaches some CSS styles, and sets up some keybindings & timers.
 
 ### New Notification
 

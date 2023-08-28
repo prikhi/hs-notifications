@@ -1,65 +1,130 @@
-name:                hs-notifications
-version:             0.1.0.0
-github:              "prikhi/hs-notifications"
-license:             GPL-3.0
-author:              "Pavan Rikhi"
-maintainer:          "pavan.rikhi@gmail.com"
-copyright:           "GPL-3.0"
-
+name:
+  hs-notifications
+version:
+  0.1.0.0
+github:
+  prikhi/hs-notifications
+license:
+  GPL-3.0
+author:
+  Pavan Rikhi
+maintainer:
+  pavan.rikhi@gmail.com
+copyright:
+  "Pavan Rikhi, GPL-3.0"
+category:
+  Desktop, System
 extra-source-files:
-- README.md
-- ChangeLog.md
+  - README.md
+  - CHANGELOG.md
 
-# Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
 
-# To avoid duplicated efforts in documentation and dealing with the
-# complications of embedding Haddock markup inside cabal files, it is
-# common to point users to the README.md file.
-description:         Please see the README on Github at <https://github.com/prikhi/hs-notifications#readme>
+synopsis:
+  Simple GTK DBus Desktop Notification Server
+
+description: |
+  @hs-notifications@ is a DBus server that implements the Desktop Notifications
+  Specification. It listens for desktop notifications sent by DBus clients &
+  renders them on your primary monitor using the GTK UI toolkit. It features a
+  minimal but customizable GUI, with global keyboard shortcuts for dismissing
+  notifications. It can even render images sent in the notifications, like
+  album art.
+
+  You can install @hs-notifications@ with Stack: @stack install --resolver
+  nightly hs-notifications@. You should have your desktop environment or window
+  manager autostart @hs-notifications@ when logging in. An easy way to do this is
+  to add something like this to you @~/.xinitrc@:
+
+  @
+   export $(dbus-launch)
+   hs-notifications &
+  @
+
+  You can test out notifications with @notify-send@:
+
+  @
+   notify-send -t 5000 "Test Notification" "That Lasts for 5 Seconds"
+  @
+
+  See the fully-documented example configuration in the project repository for
+  customization details.
+
+
+language:
+  GHC2021
+
+ghc-options:
+    - -Wall
+    - -Wcompat
+    - -Wimplicit-lift
+    - -Wincomplete-patterns
+    - -Wincomplete-record-updates
+    - -Wincomplete-uni-patterns
+    - -Wmissing-exported-signatures
+    - -Wmissing-methods
+    - -Wmissing-signatures
+    - -Wname-shadowing
+    - -Wredundant-bang-patterns
+    - -Wredundant-constraints
+    - -Wunused-packages
+
+default-extensions:
+  - DerivingStrategies
+  - LambdaCase
+  - MultiWayIf
+  - OverloadedStrings
+  - RecordWildCards
+  - ViewPatterns
+
 
 dependencies:
-- base >= 4.7 && < 5
-- data-default
-- text
-- X11
+  - base >= 4.7 && < 5
+  - data-default
+  - text
+  - X11
+
 
 library:
-  source-dirs: src
+  source-dirs:
+    src
   dependencies:
-  - containers
-  - bytestring
-  - dbus
-  - gi-gdk
-  - gi-gdkpixbuf
-  - gi-glib
-  - gi-gtk
-  - stitch
-  - stm
-  - time
+    - containers
+    - bytestring
+    - dbus
+    - gi-gdk
+    - gi-gdkpixbuf
+    - gi-glib
+    - gi-gtk
+    - stitch
+    - stm
+    - time
 
 executables:
   hs-notifications:
-    main:                Main.hs
-    source-dirs:         app
+    source-dirs:
+      app
+    main:
+      Main.hs
     ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -O2
     dependencies:
-    - hs-notifications
-    - config-ini
-    - directory
-    - xdg-basedir
+      - hs-notifications
+      - config-ini
+      - directory
+      - xdg-basedir
 
 tests:
   hs-notifications-test:
-    main:                Spec.hs
-    source-dirs:         test
+    source-dirs:
+      test
+    main:
+      Spec.hs
     ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
     dependencies:
-    - hs-notifications
+      - hs-notifications
