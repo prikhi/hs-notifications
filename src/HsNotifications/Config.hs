@@ -95,10 +95,13 @@ instance Default Config where
                             Critical ->
                                 titleCriticalColor def
                  in
-                    "<span font-weight='bold' color='" <> titleColor <> "'>" <> escapeAmpersand (nTitle n) <> "</span>"
+                    "<span font-weight='bold' color='" <> titleColor <> "'>" <> escapeMarkup (nTitle n) <> "</span>"
             , bodyFormat = \b ->
-                "<span color='" <> bodyColor def <> "'>" <> escapeAmpersand b <> "</span>"
+                "<span color='" <> bodyColor def <> "'>" <> escapeMarkup b <> "</span>"
             }
       where
-        escapeAmpersand :: T.Text -> T.Text
-        escapeAmpersand = T.replace "&" "&amp;"
+        escapeMarkup :: T.Text -> T.Text
+        escapeMarkup =
+            T.replace ">" "&gt;"
+                . T.replace "<" "&lt;"
+                . T.replace "&" "&amp;"
