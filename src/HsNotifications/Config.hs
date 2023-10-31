@@ -37,6 +37,7 @@ data Config = Config
     , backgroundColor :: T.Text
     , titleFormat :: Notification -> T.Text
     , bodyFormat :: T.Text -> T.Text
+    , debugMode :: Bool
     }
 
 
@@ -98,6 +99,7 @@ instance Default Config where
                     "<span font-weight='bold' color='" <> titleColor <> "'>" <> escapeMarkup (nTitle n) <> "</span>"
             , bodyFormat = \b ->
                 "<span color='" <> bodyColor def <> "'>" <> escapeMarkup b <> "</span>"
+            , debugMode = False
             }
       where
         escapeMarkup :: T.Text -> T.Text

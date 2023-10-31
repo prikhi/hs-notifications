@@ -46,7 +46,7 @@ data Notification = Notification
 newtype NotificationID = NotificationID
     { fromNotificationID :: Word32
     }
-    deriving (Eq)
+    deriving (Eq, Show)
 
 
 -- | Generate the next NotificationID, looping back to 0 if we have reached

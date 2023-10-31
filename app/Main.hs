@@ -93,6 +93,7 @@ configParser = section "global" $ do
     mCritical <- fmap parseColor <$> fieldMbOf "critical-color" string
     mNormal <- fmap parseColor <$> fieldMbOf "normal-color" string
     mLow <- fmap parseColor <$> fieldMbOf "low-color" string
+    mDebug <- fieldMbOf "debug-mode" flag
     return
         def
             { closeKey = withDefault closeKey mCloseKey
@@ -113,6 +114,7 @@ configParser = section "global" $ do
             , titleCriticalColor = withDefault titleCriticalColor mCritical
             , titleNormalColor = withDefault titleNormalColor mNormal
             , titleLowColor = withDefault titleLowColor mLow
+            , debugMode = withDefault debugMode mDebug
             }
   where
     withDefault :: (Config -> a) -> Maybe a -> a

@@ -17,6 +17,7 @@ import Data.Version (showVersion)
 import Data.Word (Word32)
 import Stitch (renderCSS, (.=), (?))
 import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
 
 import DBus
 import DBus.Client
@@ -52,7 +53,8 @@ initialState :: Config -> IO (TVar AppState)
 initialState c = do
     rootPosition <-
         bimap (+ placementX c) (+ placementY c)
-            <$> getMonitorGeometryOrExit
+            <$> getMonitorGeometryOrExit c
+    when (debugMode c) $ hPutStrLn stderr $ "Initializing got root position: " <> show rootPosition
     newTVarIO
         AppState
             { appNotificationQueue =
@@ -78,8 +80,8 @@ initialState c = do
 --
 -- Exits with `exitFailure` if the Display could not be opened or a Monitor
 -- could not be found.
-getMonitorGeometryOrExit :: IO (Int32, Int32)
-getMonitorGeometryOrExit = do
+getMonitorGeometryOrExit :: Config -> IO (Int32, Int32)
+getMonitorGeometryOrExit c = do
     maybeMonitorGeometry <-
         Gdk.displayOpen "" >>= \case
             Just d ->
@@ -88,10 +90,12 @@ getMonitorGeometryOrExit = do
             Nothing ->
                 putStrLn "Could not open display." >> exitFailure
     case maybeMonitorGeometry of
-        Just g ->
-            (,)
-                <$> Gdk.getRectangleX g
-                <*> Gdk.getRectangleY g
+        Just g -> do
+            xPos <- Gdk.getRectangleX g
+            yPos <- Gdk.getRectangleY g
+            let coords = (xPos, yPos)
+            when (debugMode c) $ hPutStrLn stderr $ "Got monitor coordinate position: " <> show coords
+            return coords
         Nothing ->
             putStrLn "Could not find monitor." >> exitFailure
 
@@ -113,7 +117,9 @@ runGtk c sTV = do
     mbScreen <- Gdk.screenGetDefault
     forM_ mbScreen $ \screen ->
         Gdk.afterScreenMonitorsChanged screen $ do
-            rootPosition <- bimap (+ placementX c) (+ placementY c) <$> getMonitorGeometryOrExit
+            when (debugMode c) $ hPutStrLn stderr "Got screen monitor change event"
+            rootPosition <- bimap (+ placementX c) (+ placementY c) <$> getMonitorGeometryOrExit c
+            when (debugMode c) $ hPutStrLn stderr "Got new root position: "
             atomically $ modifyTVar sTV $ \s -> s {appRootPosition = rootPosition}
             moveWindowsIfNecessary c sTV
 
@@ -207,7 +213,8 @@ removeExpired c sTV = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT $ do
 -- Updates the `appNextPosition` & `appWindowList` state variables.
 showNotification :: Config -> TVar AppState -> Notification -> IO ()
 showNotification c sTV n = do
-    (winX, winY) <- appNextPosition <$> readTVarIO sTV
+    winPos@(winX, winY) <- appNextPosition <$> readTVarIO sTV
+    when (debugMode c) $ hPutStrLn stderr $ "Showing notification at position: " <> show winPos
     win <- buildNotificationWindow c sTV n
     void
         $ Gtk.onWidgetButtonPressEvent win
@@ -384,6 +391,7 @@ replaceNotification c sTV newN = void . Gdk.threadsAddIdle GLib.PRIORITY_DEFAULT
 -- once in killAllNotifications
 deleteNotification :: Config -> TVar AppState -> ReasonClosed -> NotificationID -> Gtk.Window -> IO Bool
 deleteNotification c sTV reason notificationID win = do
+    when (debugMode c) $ hPutStrLn stderr $ "Removing notification: " <> show notificationID
     widgetHeight <- Gtk.widgetGetAllocatedHeight win
     atomically . modifyTVar sTV $ \s ->
         s
