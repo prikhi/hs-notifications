@@ -451,10 +451,11 @@ killNotificationByID c sTV reason notifID =
 moveWindowsIfNecessary :: Config -> TVar AppState -> IO ()
 moveWindowsIfNecessary c sTV = do
     state <- readTVarIO sTV
-    (_, windowsAndPositions) <-
+    (nextPos, windowsAndPositions) <-
         foldM nextPosition (appRootPosition state, [])
             $ appWindowList state
     mapM_ move windowsAndPositions
+    atomically . modifyTVar sTV $ \s -> s {appNextPosition = nextPos}
   where
     nextPosition ((x, y), processed) (_, win) = do
         widgetHeight <- Gtk.widgetGetAllocatedHeight win
